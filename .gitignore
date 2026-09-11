@@ -1,0 +1,39 @@
+### Java / Maven ###
+target/
+*.class
+hs_err_pid*
+replay_pid*
+
+### IDE — IntelliJ IDEA ###
+.idea/
+*.iws
+*.iml
+*.ipr
+out/
+
+### IDE — VS Code ###
+.vscode/
+*.code-workspace
+
+### Sistema operativo ###
+.DS_Store
+Thumbs.db
+
+### Secretos / entorno (REQ-SEC-002, DEC-017) ###
+# El .env real nunca se versiona; solo la plantilla .env.example.
+.env
+.env.*.local
+!.env.example
+
+### Logs ###
+*.log
+logs/
+
+### Reportes de test y cobertura (se regeneran con ./mvnw verify) ###
+/target/surefire-reports/
+/target/failsafe-reports/
+/target/site/
+
+### Docker ###
+# Overrides locales de docker-compose, nunca los compose versionados.
+docker-compose.override.yml
