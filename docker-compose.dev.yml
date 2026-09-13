@@ -1,0 +1,39 @@
+# Entorno de desarrollo local mínimo: solo Postgres + Redis.
+# La aplicación corre en el host (./mvnw spring-boot:run), no en un contenedor,
+# por eso no hay un servicio "app" aquí ni depends_on entre servicios.
+# El Compose completo de 4 servicios (con la app y authorization-provider
+# dentro de la red) llega en Fase 15 — ver ADR-0006.
+
+name: payment-gateway-engine-dev
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: pge-postgres-dev
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - pge-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7
+    container_name: pge-redis-dev
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  pge-postgres-data:

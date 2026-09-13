@@ -1,0 +1,56 @@
+# Configuración base — común a todos los perfiles (default, test, docker).
+# REQ-INST-002: ningún valor sensible hardcodeado en código fuente. Los defaults
+# de host/puerto/nombre de DB/usuario son de conveniencia para desarrollo local
+# (no son secretos). POSTGRES_PASSWORD NO tiene default: debe provenir siempre
+# del entorno (.env), forzando configuración explícita en todo momento.
+
+server:
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: payment-gateway-engine
+
+  datasource:
+    url: jdbc:postgresql://${POSTGRES_HOST:localhost}:${POSTGRES_PORT:5432}/${POSTGRES_DB:payment_gateway_engine}
+    username: ${POSTGRES_USER:pge_user}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    hibernate:
+      # BR-005: PostgreSQL (vía las migraciones de Flyway) es la única fuente de
+      # verdad del esquema. Hibernate nunca genera ni actualiza tablas — solo
+      # valida que las entidades @Entity coincidan con lo que Flyway ya creó.
+      ddl-auto: validate
+    # Sin vistas server-side en este proyecto (arquitectura hexagonal con casos
+    # de uso explícitos, sin acceso a datos en el controller) — mantener la
+    # sesión de Hibernate abierta durante todo el request no aporta nada aquí
+    # y es la causa clásica del anti-patrón N+1 oculto por lazy loading.
+    open-in-view: false
+    # SQL logging de Hibernate (formato + nivel de log) se activa en Fase 3,
+    # junto con la verificación de ADR-0001 (mapeo) y ADR-0004 (confirmar que
+    # se emite SELECT ... FOR UPDATE). No tiene sentido declararlo antes de
+    # que exista una sola entidad @Entity.
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      # Default de Spring Boot, declarado explícitamente: sin autenticación real
+      # (CON-006), este endpoint no debe filtrar detalle de dependencias internas
+      # (DB/Redis/Circuit Breaker) a un caller sin identificar. Se revisa en
+      # Fase 12 al introducir los indicadores custom de REQ-OBS-001.
+      show-details: never
