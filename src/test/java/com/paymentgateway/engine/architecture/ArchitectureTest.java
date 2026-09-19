@@ -1,4 +1,4 @@
-package com.paymentgateway.architecture;
+package com.paymentgateway.engine.architecture;
 
 import com.tngtech.archunit.core.importer.ImportOption;
 import com.tngtech.archunit.junit.AnalyzeClasses;
