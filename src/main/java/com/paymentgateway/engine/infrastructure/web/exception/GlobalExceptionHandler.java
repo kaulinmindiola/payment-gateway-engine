@@ -1,0 +1,85 @@
+package com.paymentgateway.engine.infrastructure.web.exception;
+
+import com.paymentgateway.engine.domain.exception.AccountNotFoundException;
+import com.paymentgateway.engine.domain.exception.DomainException;
+import com.paymentgateway.engine.domain.exception.OwnershipViolationException;
+import com.paymentgateway.engine.domain.exception.UserNotFoundException;
+import jakarta.servlet.http.HttpServletRequest;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ProblemDetail;
+import org.springframework.validation.FieldError;
+import org.springframework.web.bind.MethodArgumentNotValidException;
+import org.springframework.web.bind.MissingRequestHeaderException;
+import org.springframework.web.bind.annotation.ExceptionHandler;
+import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.method.annotation.MethodArgumentTypeMismatchException;
+
+import java.net.URI;
+import java.util.stream.Collectors;
+
+@RestControllerAdvice
+public class GlobalExceptionHandler {
+
+    private static final String TYPE_BASE = "https://payment-gateway-engine/errors/";
+
+    // 400 — X-User-Id (u otro parámetro) con formato inválido (no parseable como UUID).
+    @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    public ProblemDetail handleTypeMismatch(MethodArgumentTypeMismatchException ex, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "invalid-request-parameter",
+                "Parameter '" + ex.getName() + "' has an invalid value or format.", request);
+    }
+
+    // 400 — X-User-Id ausente (BR-011: "ausente" siempre 400).
+    @ExceptionHandler(MissingRequestHeaderException.class)
+    public ProblemDetail handleMissingHeader(MissingRequestHeaderException ex, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "missing-required-header",
+                "Required header '" + ex.getHeaderName() + "' is missing.", request);
+    }
+
+    // 400 — violaciones de Bean Validation en el body (Paso 3: CreateAccountRequest).
+    @ExceptionHandler(MethodArgumentNotValidException.class)
+    public ProblemDetail handleValidation(MethodArgumentNotValidException ex, HttpServletRequest request) {
+        String detail = ex.getBindingResult().getFieldErrors().stream()
+                .map(FieldError::getDefaultMessage)
+                .collect(Collectors.joining("; "));
+        return problem(HttpStatus.BAD_REQUEST, "invalid-request-body", detail, request);
+    }
+
+    // 403 — BR-008 (y BR-006/BR-014 en fases futuras): violación de ownership.
+    @ExceptionHandler(OwnershipViolationException.class)
+    public ProblemDetail handleOwnershipViolation(OwnershipViolationException ex, HttpServletRequest request) {
+        return problem(HttpStatus.FORBIDDEN, "ownership-violation", ex.getMessage(), request);
+    }
+
+    // 404 — BR-012: X-User-Id no corresponde a un usuario existente.
+    @ExceptionHandler(UserNotFoundException.class)
+    public ProblemDetail handleUserNotFound(UserNotFoundException ex, HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, "user-not-found", ex.getMessage(), request);
+    }
+
+    // 404 — cuenta no encontrada.
+    @ExceptionHandler(AccountNotFoundException.class)
+    public ProblemDetail handleAccountNotFound(AccountNotFoundException ex, HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, "account-not-found", ex.getMessage(), request);
+    }
+
+    // 422 — catch-all de defensa en profundidad para invariantes de dominio
+    // sin handler específico todavía (InvalidAmountException, InsufficientBalanceException,
+    // InvalidTransactionTargetException — llegan con lógica real en Fases 5/8).
+    // Spring despacha al handler MÁS ESPECÍFICO disponible: los tres de arriba
+    // nunca caen aquí.
+    @ExceptionHandler(DomainException.class)
+    public ProblemDetail handleDomainException(DomainException ex, HttpServletRequest request) {
+        return problem(HttpStatus.UNPROCESSABLE_ENTITY, "business-rule-violation", ex.getMessage(), request);
+    }
+
+    private ProblemDetail problem(HttpStatus status, String typeSlug, String detail, HttpServletRequest request) {
+        ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detail);
+        problem.setType(URI.create(TYPE_BASE + typeSlug));
+        problem.setTitle(status.getReasonPhrase());
+        problem.setInstance(URI.create(request.getRequestURI()));
+        // traceId: pendiente -- requiere TraceIdFilter + MDC (Fase 10, Sección 14
+        // del contexto). BR-011 lo exige; se añade allí, no aquí (ver Decisión 2).
+        return problem;
+    }
+}
