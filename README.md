@@ -20,3 +20,30 @@ Luego:
 \`\`\`bash
 ./mvnw spring-boot:run
 \`\`\`
+
+## API — Cuentas (Fase 4)
+
+Requiere un usuario ya sembrado en `users` (no hay endpoint de creación de usuarios — ver "Qué NO hace este proyecto").
+
+### Crear cuenta
+
+```bash
+curl -X POST http://localhost:8080/api/v1/accounts \
+  -H "X-User-Id: <UUID de un usuario existente>" \
+  -H "Content-Type: application/json" \
+  -d '{"initialBalance": 250.00}'
+```
+
+Respuesta `201 Created`:
+```json
+{"id": "...", "ownerId": "...", "balance": 250.00, "status": "ACTIVE"}
+```
+
+### Consultar cuenta
+
+```bash
+curl http://localhost:8080/api/v1/accounts/<ACCOUNT_ID> \
+  -H "X-User-Id: <UUID del owner>"
+```
+
+`200 OK` si eres el owner; `403 Forbidden` si no; `404 Not Found` si la cuenta no existe.
