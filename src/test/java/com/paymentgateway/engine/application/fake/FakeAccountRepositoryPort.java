@@ -15,16 +15,17 @@ public class FakeAccountRepositoryPort implements AccountRepositoryPort {
 
     @Override
     public Account findByIdForUpdate(UUID id) {
-        Account account = storage.get(id);
-        if (account == null) {
+        Account stored = storage.get(id);
+        if (stored == null) {
             throw new AccountNotFoundException(id.toString());
         }
-        return account;
+        return copyOf(stored);
     }
 
     @Override
     public Optional<Account> findById(UUID id) {
-        return Optional.ofNullable(storage.get(id));
+        return Optional.ofNullable(storage.get(id))
+                .map(this::copyOf);
     }
 
     @Override
@@ -34,5 +35,13 @@ public class FakeAccountRepositoryPort implements AccountRepositoryPort {
 
     public int size() {
         return storage.size();
+    }
+    private Account copyOf(Account account) {
+        return Account.reconstitute(
+                account.getId(),
+                account.getOwnerId(),
+                account.getBalance(),
+                account.getStatus()
+        );
     }
 }

@@ -1,5 +1,7 @@
 package com.paymentgateway.engine.infrastructure.web.exception;
 
+import com.paymentgateway.engine.application.exception.UnsupportedTransferTypeException;
+import com.paymentgateway.engine.application.exception.UnsupportedTransferTypeException;
 import com.paymentgateway.engine.domain.exception.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
@@ -38,6 +40,16 @@ class GlobalExceptionHandlerTest {
 
         assertThat(problem.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
         assertThat(problem.getType().toString()).endsWith("/errors/account-not-found");
+    }
+        @Test
+    void handleUnsupportedTransferType_mapsTo400() {
+        UnsupportedTransferTypeException ex =
+                new UnsupportedTransferTypeException(com.paymentgateway.engine.domain.model.TransferType.EXTERNAL);
+
+        ProblemDetail problem = handler.handleUnsupportedTransferType(ex, requestTo("/api/v1/payments/transfer"));
+
+        assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(problem.getType().toString()).endsWith("/errors/unsupported-transfer-type");
     }
 
     @Test
