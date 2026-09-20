@@ -47,3 +47,28 @@ curl http://localhost:8080/api/v1/accounts/<ACCOUNT_ID> \
 ```
 
 `200 OK` si eres el owner; `403 Forbidden` si no; `404 Not Found` si la cuenta no existe.
+
+## API — Transferencias y consulta (Fase 5)
+
+### Transferir dinero (INTERNAL)
+
+```bash
+curl -X POST http://localhost:8080/api/v1/payments/transfer \
+  -H "X-User-Id: <UUID owner de la cuenta origen>" \
+  -H "X-Idempotency-Key: <clave única por intento de transferencia>" \
+  -H "Content-Type: application/json" \
+  -d '{"sourceAccountId": "...", "transferType": "INTERNAL", "targetAccountId": "...", "amount": 150.00}'
+```
+
+Respuesta `201 Created` con la `Transaction` creada (`status: COMPLETED`).
+
+> **Limitación de fase**: `transferType: "EXTERNAL"` responde `400` -- se implementa en Fase 8.
+
+### Consultar transacción
+
+```bash
+curl http://localhost:8080/api/v1/transactions/<TRANSACTION_ID> \
+  -H "X-User-Id: <UUID del owner de ORIGEN o DESTINO>"
+```
+
+`200 OK`, `403 Forbidden` si no eres owner de ninguna de las dos cuentas, `404 Not Found` si no existe.
