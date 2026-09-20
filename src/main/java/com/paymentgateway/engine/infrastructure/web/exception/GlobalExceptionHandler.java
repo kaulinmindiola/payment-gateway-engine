@@ -4,6 +4,7 @@ import com.paymentgateway.engine.domain.exception.AccountNotFoundException;
 import com.paymentgateway.engine.domain.exception.DomainException;
 import com.paymentgateway.engine.domain.exception.OwnershipViolationException;
 import com.paymentgateway.engine.domain.exception.UserNotFoundException;
+import com.paymentgateway.engine.application.exception.UnsupportedTransferTypeException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -63,6 +64,19 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.NOT_FOUND, "account-not-found", ex.getMessage(), request);
     }
 
+    // 400 — EXTERNAL todavía no está soportado en esta fase.
+    @ExceptionHandler(UnsupportedTransferTypeException.class)
+    public ProblemDetail handleUnsupportedTransferType(
+            UnsupportedTransferTypeException ex,
+            HttpServletRequest request) {
+        return problem(
+                HttpStatus.BAD_REQUEST,
+                "unsupported-transfer-type",
+                ex.getMessage(),
+                request
+        );
+    }
+
     // 422 — catch-all de defensa en profundidad para invariantes de dominio
     // sin handler específico todavía (InvalidAmountException, InsufficientBalanceException,
     // InvalidTransactionTargetException — llegan con lógica real en Fases 5/8).
@@ -82,4 +96,12 @@ public class GlobalExceptionHandler {
         // del contexto). BR-011 lo exige; se añade allí, no aquí (ver Decisión 2).
         return problem;
     }
+        // 404 -- BR-009: transacción no encontrada.
+    @ExceptionHandler(com.paymentgateway.engine.domain.exception.TransactionNotFoundException.class)
+    public ProblemDetail handleTransactionNotFound(
+            com.paymentgateway.engine.domain.exception.TransactionNotFoundException ex,
+            HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, "transaction-not-found", ex.getMessage(), request);
+    }
+    
 }
