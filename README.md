@@ -72,3 +72,7 @@ curl http://localhost:8080/api/v1/transactions/<TRANSACTION_ID> \
 ```
 
 `200 OK`, `403 Forbidden` si no eres owner de ninguna de las dos cuentas, `404 Not Found` si no existe.
+
+**Idempotencia** (Fase 6): reenviar la misma request con el mismo `X-Idempotency-Key`:
+- Si la primera aún está en curso → `409 Conflict`.
+- Si la primera ya terminó (éxito o fallo de negocio) → se devuelve la respuesta original exacta, sin re-ejecutar.
