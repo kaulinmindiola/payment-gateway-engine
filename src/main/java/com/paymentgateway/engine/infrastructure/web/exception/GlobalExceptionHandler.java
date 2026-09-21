@@ -46,6 +46,13 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.BAD_REQUEST, "invalid-request-body", detail, request);
     }
 
+    // 400 -- header presente pero vacío (distinto de MissingRequestHeaderException,
+    // que cubre AUSENCIA total del header).
+    @ExceptionHandler(BlankHeaderException.class)
+    public ProblemDetail handleBlankHeader(BlankHeaderException ex, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "invalid-request-parameter", ex.getMessage(), request);
+    }
+
     // 403 — BR-008 (y BR-006/BR-014 en fases futuras): violación de ownership.
     @ExceptionHandler(OwnershipViolationException.class)
     public ProblemDetail handleOwnershipViolation(OwnershipViolationException ex, HttpServletRequest request) {
@@ -102,6 +109,13 @@ public class GlobalExceptionHandler {
             com.paymentgateway.engine.domain.exception.TransactionNotFoundException ex,
             HttpServletRequest request) {
         return problem(HttpStatus.NOT_FOUND, "transaction-not-found", ex.getMessage(), request);
+    }
+    // 409 -- BR-002: key en estado IN_PROGRESS.
+    @ExceptionHandler(com.paymentgateway.engine.application.exception.IdempotencyConflictException.class)
+    public ProblemDetail handleIdempotencyConflict(
+            com.paymentgateway.engine.application.exception.IdempotencyConflictException ex,
+            HttpServletRequest request) {
+        return problem(HttpStatus.CONFLICT, "idempotency-conflict", ex.getMessage(), request);
     }
     
 }
