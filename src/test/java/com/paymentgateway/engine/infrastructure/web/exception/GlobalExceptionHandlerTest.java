@@ -1,5 +1,6 @@
 package com.paymentgateway.engine.infrastructure.web.exception;
 
+import com.paymentgateway.engine.application.exception.IdempotencyConflictException;
 import com.paymentgateway.engine.application.exception.UnsupportedTransferTypeException;
 import com.paymentgateway.engine.application.exception.UnsupportedTransferTypeException;
 import com.paymentgateway.engine.domain.exception.*;
@@ -73,4 +74,19 @@ class GlobalExceptionHandlerTest {
         assertThat(problem.getType().toString()).endsWith("/errors/business-rule-violation");
         assertThat(problem.getDetail()).isEqualTo("Amount must be strictly positive");
     }
+    @Test
+    void handleIdempotencyConflict_mapsTo409() {
+        IdempotencyConflictException ex = new IdempotencyConflictException("dup-key");
+        ProblemDetail problem = handler.handleIdempotencyConflict(ex, requestTo("/api/v1/payments/transfer"));
+        assertThat(problem.getStatus()).isEqualTo(HttpStatus.CONFLICT.value());
+        assertThat(problem.getType().toString()).endsWith("/errors/idempotency-conflict");
+    }
+
+    @Test
+void handleBlankHeader_mapsTo400() {
+    BlankHeaderException ex = new BlankHeaderException("X-Idempotency-Key");
+    ProblemDetail problem = handler.handleBlankHeader(ex, requestTo("/api/v1/payments/transfer"));
+    assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+    assertThat(problem.getType().toString()).endsWith("/errors/invalid-request-parameter");
+}
 }

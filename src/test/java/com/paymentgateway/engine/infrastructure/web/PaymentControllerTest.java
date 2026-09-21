@@ -3,6 +3,7 @@ package com.paymentgateway.engine.infrastructure.web;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paymentgateway.engine.application.exception.UnsupportedTransferTypeException;
 import com.paymentgateway.engine.application.usecase.TransferMoney;
+import com.paymentgateway.engine.application.usecase.TransferOutcome;
 import com.paymentgateway.engine.domain.exception.InsufficientBalanceException;
 import com.paymentgateway.engine.domain.model.Transaction;
 import com.paymentgateway.engine.domain.model.TransferType;
@@ -45,7 +46,7 @@ class PaymentControllerTest {
         UUID sourceId = UUID.randomUUID();
         UUID targetId = UUID.randomUUID();
         Transaction tx = Transaction.createInternal(sourceId, targetId, new BigDecimal("10.00"), "key-1");
-        given(transferMoney.execute(any())).willReturn(tx);
+        given(transferMoney.execute(any())).willReturn(new TransferOutcome.Executed(tx));
 
         mockMvc.perform(post("/api/v1/payments/transfer")
                         .header("X-User-Id", userId.toString())
@@ -68,6 +69,18 @@ class PaymentControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.type").value(endsWith("/errors/missing-required-header")));
     }
+    @Test
+    void transfer_blankIdempotencyKeyHeader_returns400() throws Exception {
+    UUID userId = UUID.randomUUID();
+
+    mockMvc.perform(post("/api/v1/payments/transfer")
+                    .header("X-User-Id", userId.toString())
+                    .header("X-Idempotency-Key", "")
+                    .contentType("application/json")
+                    .content(validInternalBody(UUID.randomUUID(), UUID.randomUUID())))
+            .andExpect(status().isBadRequest())
+            .andExpect(jsonPath("$.type").value(endsWith("/errors/invalid-request-parameter")));
+}
 
     @Test
     void transfer_internalWithoutTargetAccountId_returns400FromBeanValidation() throws Exception {
