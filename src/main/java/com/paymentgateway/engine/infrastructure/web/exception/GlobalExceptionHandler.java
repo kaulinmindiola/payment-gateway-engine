@@ -71,6 +71,14 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.NOT_FOUND, "account-not-found", ex.getMessage(), request);
     }
 
+        // 404 -- ExternalBank inexistente.
+    @ExceptionHandler(com.paymentgateway.engine.domain.exception.ExternalBankNotFoundException.class)
+    public ProblemDetail handleExternalBankNotFound(
+            com.paymentgateway.engine.domain.exception.ExternalBankNotFoundException ex,
+            HttpServletRequest request) {
+        return problem(HttpStatus.NOT_FOUND, "external-bank-not-found", ex.getMessage(), request);
+    }
+
     // 400 — EXTERNAL todavía no está soportado en esta fase.
     @ExceptionHandler(UnsupportedTransferTypeException.class)
     public ProblemDetail handleUnsupportedTransferType(
