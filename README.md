@@ -76,3 +76,32 @@ curl http://localhost:8080/api/v1/transactions/<TRANSACTION_ID> \
 **Idempotencia** (Fase 6): reenviar la misma request con el mismo `X-Idempotency-Key`:
 - Si la primera aún está en curso → `409 Conflict`.
 - Si la primera ya terminó (éxito o fallo de negocio) → se devuelve la respuesta original exacta, sin re-ejecutar.
+
+## API — Catálogo de bancos externos (Fase 7)
+
+Sin autenticación (`X-User-Id` no requerido) — dato de referencia público.
+
+### Listar catálogo completo
+
+```bash
+curl http://localhost:8080/api/v1/external-banks
+```
+
+Respuesta `200 OK`, array denormalizado (incluye `providerCode` inline, sin paginación — excepción justificada, ver `ADR-0010`).
+
+### Consultar un banco específico
+
+```bash
+curl http://localhost:8080/api/v1/external-banks/<EXTERNAL_BANK_ID>
+```
+
+`200 OK` si existe; `404 Not Found` si no.
+
+### Datos demo sembrados (perfil `docker`)
+
+Ejecutando con `-Dspring-boot.run.profiles=docker` (o vía `docker compose`, Fase 13), el catálogo viene pre-sembrado:
+
+| Provider | Bank ID | Código | País |
+|---|---|---|---|
+| `SWIFT-demo` (reliable) | `20000000-0000-0000-0000-000000000001` | DE-DEMO-001 | DE |
+| `RAILS-flaky` (flaky, para Fase 8) | `20000000-0000-0000-0000-000000000002` | ES-DEMO-001 | ES |
