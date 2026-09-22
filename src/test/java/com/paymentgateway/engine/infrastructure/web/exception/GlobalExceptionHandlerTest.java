@@ -89,4 +89,12 @@ void handleBlankHeader_mapsTo400() {
     assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
     assertThat(problem.getType().toString()).endsWith("/errors/invalid-request-parameter");
 }
+
+@Test
+void handleExternalBankNotFound_mapsTo404() {
+    ExternalBankNotFoundException ex = new ExternalBankNotFoundException("bank-1");
+    ProblemDetail problem = handler.handleExternalBankNotFound(ex, requestTo("/api/v1/external-banks/bank-1"));
+    assertThat(problem.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
+    assertThat(problem.getType().toString()).endsWith("/errors/external-bank-not-found");
+}
 }
