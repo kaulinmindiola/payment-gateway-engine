@@ -1,0 +1,3 @@
+INSERT INTO external_banks (id, provider_id, code, name, country, currency, status) VALUES
+('20000000-0000-0000-0000-000000000001', '10000000-0000-0000-0000-000000000001', 'DE-DEMO-001', 'Demo Bank Berlin', 'DE', 'EUR', 'ACTIVE'),
+('20000000-0000-0000-0000-000000000002', '10000000-0000-0000-0000-000000000002', 'ES-DEMO-001', 'Demo Bank Madrid', 'ES', 'EUR', 'ACTIVE');
