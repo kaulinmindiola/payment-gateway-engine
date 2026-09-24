@@ -16,7 +16,10 @@ public record TransferRequest(
         @NotNull(message = "transferType is required")
         TransferType transferType,
 
-        UUID targetAccountId, // requerido solo si transferType=INTERNAL, ver isTargetAccountIdValid()
+        UUID targetAccountId,          // requerido solo si INTERNAL
+        UUID targetProviderId,         // requerido solo si EXTERNAL
+        UUID targetBankId,             // requerido solo si EXTERNAL
+        String targetExternalReference, // requerido solo si EXTERNAL
 
         @NotNull(message = "amount is required")
         @Positive(message = "amount must be strictly positive")
@@ -25,5 +28,12 @@ public record TransferRequest(
     @AssertTrue(message = "targetAccountId is required when transferType is INTERNAL")
     public boolean isTargetAccountIdValid() {
         return transferType != TransferType.INTERNAL || targetAccountId != null;
+    }
+
+    @AssertTrue(message = "targetProviderId, targetBankId and targetExternalReference are required when transferType is EXTERNAL")
+    public boolean isExternalFieldsValid() {
+        return transferType != TransferType.EXTERNAL
+                || (targetProviderId != null && targetBankId != null
+                        && targetExternalReference != null && !targetExternalReference.isBlank());
     }
 }

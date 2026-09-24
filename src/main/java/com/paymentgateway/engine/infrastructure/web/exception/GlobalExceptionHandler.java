@@ -4,6 +4,7 @@ import com.paymentgateway.engine.domain.exception.AccountNotFoundException;
 import com.paymentgateway.engine.domain.exception.DomainException;
 import com.paymentgateway.engine.domain.exception.OwnershipViolationException;
 import com.paymentgateway.engine.domain.exception.UserNotFoundException;
+import com.paymentgateway.engine.infrastructure.adapter.http.AuthorizationTechnicalException;
 import com.paymentgateway.engine.application.exception.UnsupportedTransferTypeException;
 import jakarta.servlet.http.HttpServletRequest;
 import org.springframework.http.HttpStatus;
@@ -124,6 +125,15 @@ public class GlobalExceptionHandler {
             com.paymentgateway.engine.application.exception.IdempotencyConflictException ex,
             HttpServletRequest request) {
         return problem(HttpStatus.CONFLICT, "idempotency-conflict", ex.getMessage(), request);
+    }
+    // 503 -- BR-011: fallo TÉCNICO del proveedor (timeout / 5xx / circuito abierto).
+    // El detail es genérico a propósito: no se filtran mensajes internos
+    // (URL del proveedor, estado del circuito) al cliente.
+    @ExceptionHandler(AuthorizationTechnicalException.class)
+    public ProblemDetail handleAuthorizationTechnical(AuthorizationTechnicalException ex, HttpServletRequest request) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "authorization-provider-unavailable",
+                "External authorization provider is temporarily unavailable. The transfer was not executed "
+                        + "and can be safely retried with the same X-Idempotency-Key.", request);
     }
     
 }
