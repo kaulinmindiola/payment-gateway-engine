@@ -24,9 +24,9 @@ public class InternalTransferHandler implements TransferHandler {
     private final LockOrderPolicy lockOrderPolicy;
 
     public InternalTransferHandler(AccountRepositoryPort accountRepositoryPort,
-                                    TransactionRepositoryPort transactionRepositoryPort,
-                                    TransactionLogRepositoryPort transactionLogRepositoryPort,
-                                    LockOrderPolicy lockOrderPolicy) {
+                                   TransactionRepositoryPort transactionRepositoryPort,
+                                   TransactionLogRepositoryPort transactionLogRepositoryPort,
+                                   LockOrderPolicy lockOrderPolicy) {
         this.accountRepositoryPort = accountRepositoryPort;
         this.transactionRepositoryPort = transactionRepositoryPort;
         this.transactionLogRepositoryPort = transactionLogRepositoryPort;
@@ -36,27 +36,34 @@ public class InternalTransferHandler implements TransferHandler {
     @Override
     @Transactional
     public Transaction handle(TransferCommand command) {
+        // 1. NUEVA VALIDACIÓN: Verifica la variante y extrae a la variable 'internal'
+        if (!(command instanceof TransferCommand.Internal internal)) {
+            throw new IllegalStateException(
+                    "InternalTransferHandler received a non-Internal TransferCommand: " + command.getClass());
+        }
+
         // BR-007: chequeo más barato primero, sin tocar la base de datos.
-        if (command.getSourceAccountId().equals(command.getTargetAccountId())) {
-            throw new SelfTransferException(command.getSourceAccountId().toString());
+        // 2. ACTUALIZACIÓN MECÁNICA: Uso de internal.propiedad() en todo el método
+        if (internal.sourceAccountId().equals(internal.targetAccountId())) {
+            throw new SelfTransferException(internal.sourceAccountId().toString());
         }
 
         // RISK-001: locks SIEMPRE en orden ascendente de account.id,
         // resuelto ANTES de cualquier findByIdForUpdate().
         LockOrder lockOrder = lockOrderPolicy.resolveLockOrder(
-                command.getSourceAccountId(), command.getTargetAccountId());
+                internal.sourceAccountId(), internal.targetAccountId());
         Account first = accountRepositoryPort.findByIdForUpdate(lockOrder.first());
         Account second = accountRepositoryPort.findByIdForUpdate(lockOrder.second());
 
         // El orden de adquisición de locks es por ID, no por rol de negocio
         // -- se reordena aquí según semántica (source/target reales).
-        Account source = first.getId().equals(command.getSourceAccountId()) ? first : second;
-        Account target = first.getId().equals(command.getTargetAccountId()) ? first : second;
+        Account source = first.getId().equals(internal.sourceAccountId()) ? first : second;
+        Account target = first.getId().equals(internal.targetAccountId()) ? first : second;
 
         // BR-006: ownership del origen. Evaluado ANTES de BR-003 para no
         // filtrar el estado de una cuenta que el llamador no posee
         // (mismo criterio que RISK-006, Fase 4).
-        if (!source.getOwnerId().equals(command.getRequestingUserId())) {
+        if (!source.getOwnerId().equals(internal.requestingUserId())) {
             throw new OwnershipViolationException(source.getId().toString());
         }
 
@@ -70,10 +77,10 @@ public class InternalTransferHandler implements TransferHandler {
 
         // BR-004: débito + crédito + registro de Transaction, unidad atómica.
         Transaction transaction = Transaction.createInternal(
-                source.getId(), target.getId(), command.getAmount(), command.getIdempotencyKey());
+                source.getId(), target.getId(), internal.amount(), internal.idempotencyKey());
 
-        source.debit(command.getAmount());   // BR-001 -- puede lanzar InsufficientBalanceException
-        target.credit(command.getAmount());
+        source.debit(internal.amount());   // BR-001 -- puede lanzar InsufficientBalanceException
+        target.credit(internal.amount());
         transaction.markCompleted();
 
         accountRepositoryPort.save(source);

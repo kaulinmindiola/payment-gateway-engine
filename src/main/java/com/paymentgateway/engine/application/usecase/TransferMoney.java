@@ -3,17 +3,17 @@ package com.paymentgateway.engine.application.usecase;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paymentgateway.engine.application.exception.IdempotencyConflictException;
-import com.paymentgateway.engine.application.exception.UnsupportedTransferTypeException;
+import com.paymentgateway.engine.application.handler.ExternalTransferHandler;
 import com.paymentgateway.engine.application.handler.InternalTransferHandler;
 import com.paymentgateway.engine.application.handler.TransferCommand;
 import com.paymentgateway.engine.domain.exception.DomainException;
 import com.paymentgateway.engine.domain.exception.OwnershipViolationException;
 import com.paymentgateway.engine.domain.model.Transaction;
-import com.paymentgateway.engine.domain.model.TransferType;
 import com.paymentgateway.engine.domain.port.IdempotencyClaim;
 import com.paymentgateway.engine.domain.port.IdempotencyPort;
 import com.paymentgateway.engine.domain.port.IdempotencyResult;
 import com.paymentgateway.engine.domain.port.TransactionRepositoryPort;
+import com.paymentgateway.engine.infrastructure.adapter.http.AuthorizationTechnicalException;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -22,13 +22,18 @@ import org.springframework.stereotype.Service;
 public class TransferMoney {
 
     private final InternalTransferHandler internalTransferHandler;
+    private final ExternalTransferHandler externalTransferHandler;
     private final IdempotencyPort idempotencyPort;
     private final TransactionRepositoryPort transactionRepositoryPort;
     private final ObjectMapper objectMapper;
 
-    public TransferMoney(InternalTransferHandler internalTransferHandler, IdempotencyPort idempotencyPort,
-                          TransactionRepositoryPort transactionRepositoryPort, ObjectMapper objectMapper) {
+    public TransferMoney(InternalTransferHandler internalTransferHandler,
+                          ExternalTransferHandler externalTransferHandler,
+                          IdempotencyPort idempotencyPort,
+                          TransactionRepositoryPort transactionRepositoryPort,
+                          ObjectMapper objectMapper) {
         this.internalTransferHandler = internalTransferHandler;
+        this.externalTransferHandler = externalTransferHandler;
         this.idempotencyPort = idempotencyPort;
         this.transactionRepositoryPort = transactionRepositoryPort;
         this.objectMapper = objectMapper;
@@ -50,26 +55,28 @@ public class TransferMoney {
             cacheSuccess(command.getIdempotencyKey(), transaction);
             return new TransferOutcome.Executed(transaction);
         } catch (DataIntegrityViolationException duplicate) {
-            // RISK-003/ADR-0003: Redis estaba caído (fallback en tryBegin ya
-            // dejó pasar). Postgres rechazó el INSERT por el UNIQUE de
-            // idempotency_key -- la Transaction original YA existe. Se
-            // devuelve tal cual, logrando idempotencia real incluso sin caché.
             return transactionRepositoryPort.findByIdempotencyKey(command.getIdempotencyKey())
                     .<TransferOutcome>map(TransferOutcome.Executed::new)
-                    .orElseThrow(() -> duplicate); // defensivo -- no debería alcanzarse
+                    .orElseThrow(() -> duplicate);
         } catch (DomainException ex) {
             cacheFailure(command.getIdempotencyKey(), ex);
-            throw ex; // primera vez: GlobalExceptionHandler responde normalmente
+            throw ex;
+        } catch (AuthorizationTechnicalException ex) {
+            // Fase 8, Decisión 2: fallo TÉCNICO (timeout/5xx/circuito abierto).
+            // NO se cachea como resultado terminal -- se LIBERA la key para
+            // que un reintento legítimo del cliente no espere el TTL de 24h.
+            // Ninguna Transaction se persiste (ExternalTransferHandler ya
+            // revirtió vía @Transactional) -- CS-02 sigue garantizado por el
+            // UNIQUE constraint si el reintento SÍ llega a persistir después.
+            idempotencyPort.release(command.getIdempotencyKey());
+            throw ex;
         }
-        // UnsupportedTransferTypeException / IllegalArgumentException: NO se
-        // cachean (Decisión 4) -- ver nota sobre key atascada en IN_PROGRESS
-        // hasta TTL, aceptada como Opción A.
     }
 
     private Transaction dispatch(TransferMoneyCommand command) {
         return switch (command.getTransferType()) {
             case INTERNAL -> internalTransferHandler.handle(toInternalCommand(command));
-            case EXTERNAL -> throw new UnsupportedTransferTypeException(TransferType.EXTERNAL);
+            case EXTERNAL -> externalTransferHandler.handle(toExternalCommand(command));
         };
     }
 
@@ -88,13 +95,6 @@ public class TransferMoney {
                 IdempotencyResult.of(IdempotencyResult.Outcome.FAILED, httpStatus, serialize(payload)));
     }
 
-    // DUPLICACIÓN CONOCIDA Y DOCUMENTADA: espeja un subconjunto acotado del
-    // mapeo de GlobalExceptionHandler (infrastructure/web/exception/), limitado
-    // a los DomainException que InternalTransferHandler puede lanzar.
-    // application/ no puede depender de infrastructure/ (ArchUnit) -- dado el
-    // contrato ya fijo de IdempotencyPort (httpStatus:int, Fase 2), esta
-    // duplicación acotada es estructuralmente necesaria. Si se añade un nuevo
-    // DomainException con status distinto en este flujo, actualizar AMBOS lugares.
     private int httpStatusFor(DomainException ex) {
         return (ex instanceof OwnershipViolationException) ? HttpStatus.FORBIDDEN.value() : HttpStatus.UNPROCESSABLE_ENTITY.value();
     }
@@ -115,8 +115,20 @@ public class TransferMoney {
         if (command.getTargetAccountId() == null) {
             throw new IllegalArgumentException("targetAccountId is required for INTERNAL transfers");
         }
-        return TransferCommand.forInternal(
+        return new TransferCommand.Internal(
                 command.getSourceAccountId(), command.getRequestingUserId(),
                 command.getTargetAccountId(), command.getAmount(), command.getIdempotencyKey());
+    }
+
+    private TransferCommand toExternalCommand(TransferMoneyCommand command) {
+        if (command.getTargetProviderId() == null || command.getTargetBankId() == null
+                || command.getTargetExternalReference() == null) {
+            throw new IllegalArgumentException(
+                    "targetProviderId, targetBankId and targetExternalReference are required for EXTERNAL transfers");
+        }
+        return new TransferCommand.External(
+                command.getSourceAccountId(), command.getRequestingUserId(), command.getTargetProviderId(),
+                command.getTargetBankId(), command.getTargetExternalReference(),
+                command.getAmount(), command.getIdempotencyKey());
     }
 }
