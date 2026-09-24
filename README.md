@@ -105,3 +105,29 @@ Ejecutando con `-Dspring-boot.run.profiles=docker` (o vía `docker compose`, Fas
 |---|---|---|---|
 | `SWIFT-demo` (reliable) | `20000000-0000-0000-0000-000000000001` | DE-DEMO-001 | DE |
 | `RAILS-flaky` (flaky, para Fase 8) | `20000000-0000-0000-0000-000000000002` | ES-DEMO-001 | ES |
+
+### Transferir dinero (EXTERNAL) — Fase 8
+
+Requiere el proveedor de autorización simulado (WireMock) en `localhost:8089`.
+Hasta Fase 13 (`docker compose`), se levanta manualmente reutilizando los
+mismos stubs versionados que usan los tests:
+
+```bash
+docker run -d --name pge-wiremock -p 8089:8080 \
+  -v "$(pwd)/wiremock:/home/wiremock" wiremock/wiremock:3.5.4
+```
+
+```bash
+curl -X POST http://localhost:8080/api/v1/payments/transfer \
+  -H "X-User-Id: <owner de la cuenta origen>" \
+  -H "X-Idempotency-Key: <clave única>" \
+  -H "Content-Type: application/json" \
+  -d '{"sourceAccountId":"...","transferType":"EXTERNAL","targetProviderId":"...","targetBankId":"...","targetExternalReference":"...","amount":100.00}'
+```
+
+| Escenario (stubs demo) | Resultado |
+|---|---|
+| `SWIFT-demo`, referencia normal | `201`, `COMPLETED` |
+| `SWIFT-demo`, referencia terminada en `-DECLINE` | `201`, `FAILED` / `DECLINED` (resultado de negocio, sin reintento) |
+| `RAILS-flaky` | `201`, `COMPLETED` tras 503 → timeout → aprobado (reintentos internos) |
+| Proveedor caído / circuito abierto | `503`: no se ejecutó nada y se puede reintentar con la misma `X-Idempotency-Key` |
