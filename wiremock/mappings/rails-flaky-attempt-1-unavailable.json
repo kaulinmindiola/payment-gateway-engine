@@ -1,0 +1,23 @@
+{
+  "priority": 5,
+  "scenarioName": "external-provider-flaky",
+  "requiredScenarioState": "Started",
+  "newScenarioState": "SECOND_ATTEMPT",
+  "request": {
+    "method": "POST",
+    "urlPath": "/v1/authorizations",
+    "headers": {
+      "X-Provider-Code": { "equalTo": "RAILS-flaky" }
+    }
+  },
+  "response": {
+    "status": 503,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "type": "https://authorization-provider/errors/unavailable",
+      "title": "Service Temporarily Unavailable",
+      "status": 503,
+      "detail": "Downstream rail congestion (simulated)"
+    }
+  }
+}

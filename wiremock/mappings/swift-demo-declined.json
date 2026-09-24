@@ -1,0 +1,23 @@
+{
+  "priority": 1,
+  "request": {
+    "method": "POST",
+    "urlPath": "/v1/authorizations",
+    "headers": {
+      "X-Provider-Code": { "equalTo": "SWIFT-demo" }
+    },
+    "bodyPatterns": [
+      { "matchesJsonPath": { "expression": "$.targetExternalReference", "matches": ".*-DECLINE$" } }
+    ]
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "status": "DECLINED",
+      "providerReference": null,
+      "reason": "BANK_REJECTED",
+      "processedAt": "2026-01-01T00:00:00Z"
+    }
+  }
+}

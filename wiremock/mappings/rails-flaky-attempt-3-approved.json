@@ -1,0 +1,22 @@
+{
+  "priority": 5,
+  "scenarioName": "external-provider-flaky",
+  "requiredScenarioState": "THIRD_ATTEMPT",
+  "request": {
+    "method": "POST",
+    "urlPath": "/v1/authorizations",
+    "headers": {
+      "X-Provider-Code": { "equalTo": "RAILS-flaky" }
+    }
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "status": "APPROVED",
+      "providerReference": "AUTH-RAILS-FLAKY-RECOVERED",
+      "reason": null,
+      "processedAt": "2026-01-01T00:00:00Z"
+    }
+  }
+}
