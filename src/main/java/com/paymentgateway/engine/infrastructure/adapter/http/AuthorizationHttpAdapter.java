@@ -1,0 +1,95 @@
+package com.paymentgateway.engine.infrastructure.adapter.http;
+
+import com.paymentgateway.engine.domain.port.AuthorizationPort;
+import com.paymentgateway.engine.domain.port.AuthorizationRequest;
+import com.paymentgateway.engine.domain.port.AuthorizationResult;
+
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
+import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
+import io.github.resilience4j.retry.annotation.Retry;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.stereotype.Component;
+import org.springframework.web.client.HttpServerErrorException;
+import org.springframework.web.client.ResourceAccessException;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+
+import java.io.IOException;
+import java.time.Duration;
+import java.util.UUID;
+
+@Component
+public class AuthorizationHttpAdapter implements AuthorizationPort {
+
+    private final RestClient restClient;
+
+    public AuthorizationHttpAdapter(RestClient.Builder restClientBuilder,
+                                     @Value("${payment-gateway.authorization-provider.base-url}") String baseUrl) {
+        // Timeouts exactos de la Sección 11 del contexto -- independientes
+        // de Resilience4j (Paso 2), son del cliente HTTP subyacente.
+        SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
+        factory.setConnectTimeout(Duration.ofSeconds(1));
+        factory.setReadTimeout(Duration.ofSeconds(2));
+
+        this.restClient = restClientBuilder.baseUrl(baseUrl).requestFactory(factory).build();
+    }
+
+    @Override
+    @CircuitBreaker(name = "authorizationProvider", fallbackMethod = "circuitOpenFallback")
+    @Retry(name = "authorizationProvider")
+    public AuthorizationResult authorize(AuthorizationRequest request) {
+        AuthorizationHttpRequestBody body = AuthorizationHttpRequestBody.from(request);
+
+        try {
+            AuthorizationHttpResponseBody response = restClient.post()
+                    .uri("/v1/authorizations")
+                    .header("X-Provider-Code", request.getProviderCode())
+                    .header("X-Idempotency-Key", request.getIdempotencyKey())
+                    .header("X-Trace-Id", generateTraceId())
+                    .body(body)
+                    .retrieve()
+                    .body(AuthorizationHttpResponseBody.class);
+
+            return response.toDomainResult();
+
+        } catch (ResourceAccessException ex) {
+            // Timeout de conexión (1s) o lectura (2s) -- sin respuesta HTTP.
+            throw new AuthorizationTimeoutException(
+                    "Authorization provider did not respond within the configured timeout", ex);
+        } catch (HttpServerErrorException ex) {
+            // 500/502/503/504 del proveedor.
+            throw new AuthorizationUnavailableException(
+                    "Authorization provider returned a server error: " + ex.getStatusCode(), ex);
+        } catch (RestClientException ex) {
+            // Timeout de lectura durante la extracción/deserialización del body (IOException en socket)
+            if (ex.getCause() instanceof IOException) {
+                throw new AuthorizationTimeoutException(
+                        "Authorization provider did not respond within the configured timeout", ex);
+            }
+            throw ex;
+        }
+        // Un 4xx inesperado se propaga sin capturar -- extensión futura,
+        // fuera de alcance (Sección 22 del plan). APPROVED/DECLINED siempre
+        // llegan como 200 (Sección 7.1 del contexto), nunca como error HTTP.
+        
+    }
+
+    /**
+     * Solo se invoca para CallNotPermittedException (circuito OPEN): el tipo
+     * del segundo parámetro restringe el fallback a esa excepción; el resto
+     * se propaga tal cual. La traduce a la jerarquía técnica propia para que
+     * TransferMoney libere la idempotency key (Fase 8, Decisión 2) sin que
+     * application/ conozca Resilience4j.
+     */
+    private AuthorizationResult circuitOpenFallback(AuthorizationRequest request, CallNotPermittedException ex) {
+        throw new AuthorizationUnavailableException("Circuit breaker is OPEN for authorization provider", ex);
+    }
+
+    private String generateTraceId() {
+        // Placeholder hasta Fase 10 (TraceIdFilter + MDC). Cumple el
+        // contrato HTTP obligatorio, aún no correlaciona con logs propios.
+        return UUID.randomUUID().toString();
+    }
+}

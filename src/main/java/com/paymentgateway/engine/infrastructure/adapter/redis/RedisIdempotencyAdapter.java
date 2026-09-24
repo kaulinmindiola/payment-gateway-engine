@@ -16,7 +16,7 @@ public class RedisIdempotencyAdapter implements IdempotencyPort {
 
     private static final Logger log = LoggerFactory.getLogger(RedisIdempotencyAdapter.class);
     private static final String KEY_PREFIX = "idempotency:transfer:";
-    private static final Duration TTL = Duration.ofHours(24); // Sección 9 del contexto
+    private static final Duration TTL = Duration.ofHours(24); 
     private static final String IN_PROGRESS_MARKER = "IN_PROGRESS";
 
     private final StringRedisTemplate redisTemplate;
@@ -61,6 +61,18 @@ public class RedisIdempotencyAdapter implements IdempotencyPort {
             redisTemplate.opsForValue().set(key, serialized, TTL);
         } catch (Exception ex) {
             log.warn("Redis unavailable during complete for key '{}', cached result lost (Postgres remains source of truth)", idempotencyKey, ex);
+        }
+    }
+    @Override
+    public void release(String idempotencyKey) {
+        String key = KEY_PREFIX + idempotencyKey;
+        try {
+            redisTemplate.delete(key);
+        } catch (Exception ex) {
+            // Mismo criterio de fallback que tryBegin/complete: si Redis no
+            // responde, la key expirará por TTL de todos modos -- no es una
+            // pérdida de corrección, solo de agilidad en el reintento.
+            log.warn("Redis unavailable during release for key '{}', will expire via TTL", idempotencyKey, ex);
         }
     }
 
