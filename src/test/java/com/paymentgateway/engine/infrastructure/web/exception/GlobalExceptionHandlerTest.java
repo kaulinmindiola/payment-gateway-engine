@@ -2,8 +2,9 @@ package com.paymentgateway.engine.infrastructure.web.exception;
 
 import com.paymentgateway.engine.application.exception.IdempotencyConflictException;
 import com.paymentgateway.engine.application.exception.UnsupportedTransferTypeException;
-import com.paymentgateway.engine.application.exception.UnsupportedTransferTypeException;
 import com.paymentgateway.engine.domain.exception.*;
+import com.paymentgateway.engine.infrastructure.adapter.http.AuthorizationUnavailableException;
+
 import org.junit.jupiter.api.Test;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
@@ -96,5 +97,16 @@ void handleExternalBankNotFound_mapsTo404() {
     ProblemDetail problem = handler.handleExternalBankNotFound(ex, requestTo("/api/v1/external-banks/bank-1"));
     assertThat(problem.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
     assertThat(problem.getType().toString()).endsWith("/errors/external-bank-not-found");
+}
+@Test
+void handleAuthorizationTechnical_mapsTo503WithoutLeakingInternalMessage() {
+    AuthorizationUnavailableException ex =
+            new AuthorizationUnavailableException("internal: http://provider:8089 returned 503", null);
+
+    ProblemDetail problem = handler.handleAuthorizationTechnical(ex, requestTo("/api/v1/payments/transfer"));
+
+    assertThat(problem.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value());
+    assertThat(problem.getType().toString()).endsWith("/errors/authorization-provider-unavailable");
+    assertThat(problem.getDetail()).doesNotContain("http://provider");
 }
 }

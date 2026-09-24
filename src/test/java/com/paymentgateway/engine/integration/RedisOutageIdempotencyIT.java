@@ -87,8 +87,8 @@ class RedisOutageIdempotencyIT {
         // Redis caído a mitad de secuencia -- ANTES de la primera transferencia.
         REDIS.stop();
 
-        TransferMoneyCommand command = TransferMoneyCommand.of(
-                sourceId, sourceOwner, TransferType.INTERNAL, targetId, new BigDecimal("10.00"), key);
+        TransferMoneyCommand command = TransferMoneyCommand.forInternal(
+                sourceId, sourceOwner, targetId, new BigDecimal("10.00"), key);
 
         // Primer intento: tryBegin() falla silenciosamente (Redis caído) ->
         // acquired() de fallback -> ejecuta normalmente, persiste en Postgres.

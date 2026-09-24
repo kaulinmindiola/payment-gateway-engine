@@ -69,8 +69,8 @@ class InternalTransferConcurrencyIT extends AbstractApplicationIntegrationTest {
             Callable<Void> task = () -> {
                 readyLatch.countDown();
                 startLatch.await(); // TODOS los hilos esperan la MISMA señal de arranque
-                TransferMoneyCommand command = TransferMoneyCommand.of(
-                        sourceId, sourceOwnerId, TransferType.INTERNAL, targetId, TRANSFER_AMOUNT, idempotencyKey);
+                TransferMoneyCommand command = TransferMoneyCommand.forInternal(
+                        sourceId, sourceOwnerId, targetId, TRANSFER_AMOUNT, idempotencyKey);
                 transferMoney.execute(command);
                 return null;
             };

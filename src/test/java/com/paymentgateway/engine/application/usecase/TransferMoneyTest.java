@@ -2,15 +2,15 @@ package com.paymentgateway.engine.application.usecase;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.paymentgateway.engine.application.exception.IdempotencyConflictException;
-import com.paymentgateway.engine.application.exception.UnsupportedTransferTypeException;
+import com.paymentgateway.engine.application.handler.ExternalTransferHandler;
 import com.paymentgateway.engine.application.handler.InternalTransferHandler;
 import com.paymentgateway.engine.application.handler.TransferCommand;
 import com.paymentgateway.engine.domain.exception.InsufficientBalanceException;
 import com.paymentgateway.engine.domain.model.Transaction;
-import com.paymentgateway.engine.domain.model.TransferType;
 import com.paymentgateway.engine.domain.port.IdempotencyClaim;
 import com.paymentgateway.engine.domain.port.IdempotencyPort;
 import com.paymentgateway.engine.domain.port.TransactionRepositoryPort;
+import com.paymentgateway.engine.infrastructure.adapter.http.AuthorizationTimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -22,12 +22,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.*;
 
 class TransferMoneyTest {
 
     private InternalTransferHandler internalTransferHandler;
+    private ExternalTransferHandler externalTransferHandler;
     private IdempotencyPort idempotencyPort;
     private TransactionRepositoryPort transactionRepositoryPort;
     private TransferMoney transferMoney;
@@ -35,19 +37,25 @@ class TransferMoneyTest {
     @BeforeEach
     void setUp() {
         internalTransferHandler = mock(InternalTransferHandler.class);
+        externalTransferHandler = mock(ExternalTransferHandler.class);
         idempotencyPort = mock(IdempotencyPort.class);
         transactionRepositoryPort = mock(TransactionRepositoryPort.class);
-        transferMoney = new TransferMoney(
-                internalTransferHandler, idempotencyPort, transactionRepositoryPort, new ObjectMapper());
+        transferMoney = new TransferMoney(internalTransferHandler, externalTransferHandler,
+                idempotencyPort, transactionRepositoryPort, new ObjectMapper());
     }
 
     private TransferMoneyCommand internalCommand(String idempotencyKey) {
-        return TransferMoneyCommand.of(UUID.randomUUID(), UUID.randomUUID(), TransferType.INTERNAL,
+        return TransferMoneyCommand.forInternal(UUID.randomUUID(), UUID.randomUUID(),
                 UUID.randomUUID(), new BigDecimal("10.00"), idempotencyKey);
     }
 
-    @Test
-    void execute_acquiredClaim_delegatesAndCachesSuccess() {
+    private TransferMoneyCommand externalCommand(String idempotencyKey) {
+        return TransferMoneyCommand.forExternal(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                UUID.randomUUID(), "REF-001", new BigDecimal("10.00"), idempotencyKey);
+    }
+
+        @Test
+        void execute_acquiredClaim_delegatesAndCachesSuccess() {
         given(idempotencyPort.tryBegin(anyString())).willReturn(IdempotencyClaim.acquired());
         Transaction tx = Transaction.createInternal(UUID.randomUUID(), UUID.randomUUID(), new BigDecimal("10.00"), "key-1");
         given(internalTransferHandler.handle(any(TransferCommand.class))).willReturn(tx);
@@ -67,6 +75,7 @@ class TransferMoneyTest {
                 .isInstanceOf(IdempotencyConflictException.class);
 
         verifyNoInteractions(internalTransferHandler);
+        verifyNoInteractions(externalTransferHandler);
     }
 
     @Test
@@ -82,6 +91,7 @@ class TransferMoneyTest {
         assertThat(replayed.httpStatus()).isEqualTo(201);
         assertThat(replayed.responseBody()).isEqualTo("{\"id\":\"cached\"}");
         verifyNoInteractions(internalTransferHandler);
+        verifyNoInteractions(externalTransferHandler);
     }
 
     @Test
@@ -113,15 +123,29 @@ class TransferMoneyTest {
     }
 
     @Test
-    void execute_external_throwsUnsupportedTransferTypeExceptionWithoutCaching() {
+    void execute_external_delegatesToExternalHandler() {
         given(idempotencyPort.tryBegin(anyString())).willReturn(IdempotencyClaim.acquired());
-        TransferMoneyCommand command = TransferMoneyCommand.of(
-                UUID.randomUUID(), UUID.randomUUID(), TransferType.EXTERNAL, null,
-                new BigDecimal("10.00"), "key-6");
+        Transaction tx = Transaction.createExternal(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "REF-001", new BigDecimal("10.00"), "key-ext-1");
+        given(externalTransferHandler.handle(any(TransferCommand.class))).willReturn(tx);
 
-        assertThatThrownBy(() -> transferMoney.execute(command))
-                .isInstanceOf(UnsupportedTransferTypeException.class);
+        TransferOutcome outcome = transferMoney.execute(externalCommand("key-ext-1"));
 
+        assertThat(outcome).isInstanceOf(TransferOutcome.Executed.class);
+        verify(externalTransferHandler).handle(any(TransferCommand.class));
+        verify(internalTransferHandler, never()).handle(any());
+    }
+
+    @Test
+    void execute_technicalExceptionFromExternalHandler_releasesKeyAndRethrows() {
+        given(idempotencyPort.tryBegin(anyString())).willReturn(IdempotencyClaim.acquired());
+        given(externalTransferHandler.handle(any(TransferCommand.class)))
+                .willThrow(new AuthorizationTimeoutException("timeout", null));
+
+        assertThatThrownBy(() -> transferMoney.execute(externalCommand("key-ext-2")))
+                .isInstanceOf(AuthorizationTimeoutException.class);
+
+        verify(idempotencyPort).release("key-ext-2");
         verify(idempotencyPort, never()).complete(anyString(), any());
     }
 }

@@ -56,4 +56,14 @@ class RedisIdempotencyAdapterIT extends AbstractApplicationIntegrationTest {
         assertThat(claim.getStatus()).isEqualTo(IdempotencyClaim.ClaimStatus.FAILED);
         assertThat(claim.getCachedHttpStatus()).isEqualTo(422);
     }
+    @Test
+    void release_afterAcquired_allowsNewAcquisitionOfSameKey() {
+        String key = "test-" + UUID.randomUUID();
+        adapter.tryBegin(key); // ACQUIRED
+
+        adapter.release(key);
+
+        IdempotencyClaim claim = adapter.tryBegin(key);
+        assertThat(claim.getStatus()).isEqualTo(IdempotencyClaim.ClaimStatus.ACQUIRED);
+    }
 }

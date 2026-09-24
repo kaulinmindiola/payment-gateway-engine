@@ -63,8 +63,8 @@ class TransferIdempotencyIT extends AbstractApplicationIntegrationTest {
             readyLatch.countDown();
             startLatch.await();
             try {
-                TransferMoneyCommand command = TransferMoneyCommand.of(
-                        sourceId, sourceOwner, TransferType.INTERNAL, targetId, new BigDecimal("10.00"), sharedKey);
+                TransferMoneyCommand command = TransferMoneyCommand.forInternal(
+                        sourceId, sourceOwner, targetId, new BigDecimal("10.00"), sharedKey);
                 transferMoney.execute(command);
                 acquiredCount.incrementAndGet();
             } catch (IdempotencyConflictException e) {
@@ -100,8 +100,8 @@ class TransferIdempotencyIT extends AbstractApplicationIntegrationTest {
         UUID targetId = seedAccount(targetOwner, BigDecimal.ZERO);
         String key = "terminal-idem-" + UUID.randomUUID();
 
-        TransferMoneyCommand command = TransferMoneyCommand.of(
-                sourceId, sourceOwner, TransferType.INTERNAL, targetId, new BigDecimal("10.00"), key);
+        TransferMoneyCommand command = TransferMoneyCommand.forInternal(
+                sourceId, sourceOwner, targetId, new BigDecimal("10.00"), key);
 
         TransferOutcome first = transferMoney.execute(command);
         assertThat(first).isInstanceOf(TransferOutcome.Executed.class);

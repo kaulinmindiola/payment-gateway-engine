@@ -34,14 +34,14 @@ class TransferRequestTest {
     @Test
     void validInternalRequest_hasNoViolations() {
         TransferRequest request = new TransferRequest(
-                UUID.randomUUID(), TransferType.INTERNAL, UUID.randomUUID(), new BigDecimal("10.00"));
+                UUID.randomUUID(), TransferType.INTERNAL, UUID.randomUUID(), null, null, null, new BigDecimal("10.00"));
         assertThat(validator.validate(request)).isEmpty();
     }
 
     @Test
     void internalRequestWithoutTargetAccountId_hasViolation() {
         TransferRequest request = new TransferRequest(
-                UUID.randomUUID(), TransferType.INTERNAL, null, new BigDecimal("10.00"));
+                UUID.randomUUID(), TransferType.INTERNAL, null, null, null, null, new BigDecimal("10.00"));
         Set<ConstraintViolation<TransferRequest>> violations = validator.validate(request);
         assertThat(violations).hasSize(1);
         assertThat(violations.iterator().next().getMessage())
@@ -50,23 +50,43 @@ class TransferRequestTest {
 
     @Test
     void externalRequestWithoutTargetAccountId_hasNoViolation() {
-        // EXTERNAL no valida targetAccountId aquí -- su propio contrato llega en Fase 8.
         TransferRequest request = new TransferRequest(
-                UUID.randomUUID(), TransferType.EXTERNAL, null, new BigDecimal("10.00"));
+                UUID.randomUUID(), TransferType.EXTERNAL, null, UUID.randomUUID(), UUID.randomUUID(), "REF-001", new BigDecimal("10.00"));
         assertThat(validator.validate(request)).isEmpty();
     }
 
     @Test
     void requestWithZeroAmount_hasViolation() {
         TransferRequest request = new TransferRequest(
-                UUID.randomUUID(), TransferType.INTERNAL, UUID.randomUUID(), BigDecimal.ZERO);
+                UUID.randomUUID(), TransferType.INTERNAL, UUID.randomUUID(), null, null, null, BigDecimal.ZERO);
         assertThat(validator.validate(request)).hasSize(1);
     }
 
     @Test
     void requestWithNullSourceAccountId_hasViolation() {
         TransferRequest request = new TransferRequest(
-                null, TransferType.INTERNAL, UUID.randomUUID(), new BigDecimal("10.00"));
+                null, TransferType.INTERNAL, UUID.randomUUID(), null, null, null, new BigDecimal("10.00"));
+        assertThat(validator.validate(request)).hasSize(1);
+    }
+
+    @Test
+    void validExternalRequest_hasNoViolations() {
+        TransferRequest request = new TransferRequest(
+                UUID.randomUUID(), TransferType.EXTERNAL, null, UUID.randomUUID(), UUID.randomUUID(), "REF-001", new BigDecimal("10.00"));
+        assertThat(validator.validate(request)).isEmpty();
+    }
+
+    @Test
+    void externalRequestMissingProviderId_hasViolation() {
+        TransferRequest request = new TransferRequest(
+                UUID.randomUUID(), TransferType.EXTERNAL, null, null, UUID.randomUUID(), "REF-001", new BigDecimal("10.00"));
+        assertThat(validator.validate(request)).hasSize(1);
+    }
+
+    @Test
+    void externalRequestBlankReference_hasViolation() {
+        TransferRequest request = new TransferRequest(
+                UUID.randomUUID(), TransferType.EXTERNAL, null, UUID.randomUUID(), UUID.randomUUID(), " ", new BigDecimal("10.00"));
         assertThat(validator.validate(request)).hasSize(1);
     }
 }

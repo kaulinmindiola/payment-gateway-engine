@@ -48,8 +48,8 @@ class InternalTransferHandlerTest {
     }
 
     private TransferCommand commandFor(UUID sourceId, UUID requester, UUID targetId, String amount) {
-        return TransferCommand.forInternal(
-                sourceId, requester, targetId, new BigDecimal(amount), "key-" + UUID.randomUUID());
+    return new TransferCommand.Internal(
+            sourceId, requester, targetId, new BigDecimal(amount), "key-" + UUID.randomUUID());
     }
 
     @Test

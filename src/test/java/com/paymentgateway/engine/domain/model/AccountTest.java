@@ -61,4 +61,23 @@ class AccountTest {
         assertThatThrownBy(() -> account.debit(new BigDecimal(value)))
                 .isInstanceOf(InvalidAmountException.class);
     }
+
+    @Test
+    void hasSufficientBalance_withExactAmount_returnsTrue() {
+        Account account = Account.createNew(ownerId, new BigDecimal("50.00"));
+        assertThat(account.hasSufficientBalance(new BigDecimal("50.00"))).isTrue();
+    }
+
+    @Test
+    void hasSufficientBalance_withMoreThanBalance_returnsFalse() {
+        Account account = Account.createNew(ownerId, new BigDecimal("50.00"));
+        assertThat(account.hasSufficientBalance(new BigDecimal("50.01"))).isFalse();
+    }
+
+    @Test
+    void hasSufficientBalance_doesNotMutateBalance() {
+        Account account = Account.createNew(ownerId, new BigDecimal("50.00"));
+        account.hasSufficientBalance(new BigDecimal("30.00"));
+        assertThat(account.getBalance()).isEqualByComparingTo("50.00");
+    }
 }

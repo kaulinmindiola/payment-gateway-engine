@@ -1,10 +1,11 @@
 package com.paymentgateway.engine.infrastructure.web;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.paymentgateway.engine.application.exception.UnsupportedTransferTypeException;
 import com.paymentgateway.engine.application.usecase.TransferMoney;
 import com.paymentgateway.engine.application.usecase.TransferOutcome;
+import com.paymentgateway.engine.domain.exception.InactiveAccountException;
 import com.paymentgateway.engine.domain.exception.InsufficientBalanceException;
+import com.paymentgateway.engine.domain.exception.SelfTransferException;
 import com.paymentgateway.engine.domain.model.Transaction;
 import com.paymentgateway.engine.domain.model.TransferType;
 import org.junit.jupiter.api.Test;
@@ -32,12 +33,12 @@ class PaymentControllerTest {
     @Autowired
     private ObjectMapper objectMapper;
 
-   @MockBean
-   private TransferMoney transferMoney;
+    @MockBean
+    private TransferMoney transferMoney;
 
     private String validInternalBody(UUID sourceId, UUID targetId) throws Exception {
         return objectMapper.writeValueAsString(
-                new TransferRequest(sourceId, TransferType.INTERNAL, targetId, new BigDecimal("10.00")));
+                new TransferRequest(sourceId, TransferType.INTERNAL, targetId, null, null, null, new BigDecimal("10.00")));
     }
 
     @Test
@@ -69,24 +70,25 @@ class PaymentControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.type").value(endsWith("/errors/missing-required-header")));
     }
+
     @Test
     void transfer_blankIdempotencyKeyHeader_returns400() throws Exception {
-    UUID userId = UUID.randomUUID();
+        UUID userId = UUID.randomUUID();
 
-    mockMvc.perform(post("/api/v1/payments/transfer")
-                    .header("X-User-Id", userId.toString())
-                    .header("X-Idempotency-Key", "")
-                    .contentType("application/json")
-                    .content(validInternalBody(UUID.randomUUID(), UUID.randomUUID())))
-            .andExpect(status().isBadRequest())
-            .andExpect(jsonPath("$.type").value(endsWith("/errors/invalid-request-parameter")));
-}
+        mockMvc.perform(post("/api/v1/payments/transfer")
+                        .header("X-User-Id", userId.toString())
+                        .header("X-Idempotency-Key", "")
+                        .contentType("application/json")
+                        .content(validInternalBody(UUID.randomUUID(), UUID.randomUUID())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value(endsWith("/errors/invalid-request-parameter")));
+    }
 
     @Test
     void transfer_internalWithoutTargetAccountId_returns400FromBeanValidation() throws Exception {
         UUID userId = UUID.randomUUID();
         String body = objectMapper.writeValueAsString(
-                new TransferRequest(UUID.randomUUID(), TransferType.INTERNAL, null, new BigDecimal("10.00")));
+                new TransferRequest(UUID.randomUUID(), TransferType.INTERNAL, null, null, null, null, new BigDecimal("10.00")));
 
         mockMvc.perform(post("/api/v1/payments/transfer")
                         .header("X-User-Id", userId.toString())
@@ -95,22 +97,6 @@ class PaymentControllerTest {
                         .content(body))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.type").value(endsWith("/errors/invalid-request-body")));
-    }
-
-    @Test
-    void transfer_externalTransferType_returns400UnsupportedTransferType() throws Exception {
-        UUID userId = UUID.randomUUID();
-        given(transferMoney.execute(any())).willThrow(new UnsupportedTransferTypeException(TransferType.EXTERNAL));
-        String body = objectMapper.writeValueAsString(
-                new TransferRequest(UUID.randomUUID(), TransferType.EXTERNAL, null, new BigDecimal("10.00")));
-
-        mockMvc.perform(post("/api/v1/payments/transfer")
-                        .header("X-User-Id", userId.toString())
-                        .header("X-Idempotency-Key", "idem-key-3")
-                        .contentType("application/json")
-                        .content(body))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.type").value(endsWith("/errors/unsupported-transfer-type")));
     }
 
     @Test
@@ -127,11 +113,12 @@ class PaymentControllerTest {
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.type").value(endsWith("/errors/business-rule-violation")));
     }
+
     @Test
-        void transfer_selfTransfer_returns422() throws Exception {
+    void transfer_selfTransfer_returns422() throws Exception {
         UUID userId = UUID.randomUUID();
         given(transferMoney.execute(any()))
-                .willThrow(new com.paymentgateway.engine.domain.exception.SelfTransferException(UUID.randomUUID().toString()));
+                .willThrow(new SelfTransferException(UUID.randomUUID().toString()));
 
         mockMvc.perform(post("/api/v1/payments/transfer")
                         .header("X-User-Id", userId.toString())
@@ -140,13 +127,13 @@ class PaymentControllerTest {
                         .content(validInternalBody(UUID.randomUUID(), UUID.randomUUID())))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.type").value(endsWith("/errors/business-rule-violation")));
-        }
+    }
 
-        @Test
-        void transfer_inactiveAccount_returns422() throws Exception {
+    @Test
+    void transfer_inactiveAccount_returns422() throws Exception {
         UUID userId = UUID.randomUUID();
         given(transferMoney.execute(any()))
-                .willThrow(new com.paymentgateway.engine.domain.exception.InactiveAccountException(UUID.randomUUID().toString()));
+                .willThrow(new InactiveAccountException(UUID.randomUUID().toString()));
 
         mockMvc.perform(post("/api/v1/payments/transfer")
                         .header("X-User-Id", userId.toString())
@@ -155,5 +142,40 @@ class PaymentControllerTest {
                         .content(validInternalBody(UUID.randomUUID(), UUID.randomUUID())))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.type").value(endsWith("/errors/business-rule-violation")));
-        }
+    }
+
+    @Test
+    void transfer_validExternalRequest_returns201() throws Exception {
+        UUID userId = UUID.randomUUID();
+        Transaction tx = Transaction.createExternal(UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                "REF-001", new BigDecimal("10.00"), "key-ext-1");
+        given(transferMoney.execute(any())).willReturn(new TransferOutcome.Executed(tx));
+
+        String body = objectMapper.writeValueAsString(new TransferRequest(
+                UUID.randomUUID(), TransferType.EXTERNAL, null, UUID.randomUUID(), UUID.randomUUID(),
+                "REF-001", new BigDecimal("10.00")));
+
+        mockMvc.perform(post("/api/v1/payments/transfer")
+                        .header("X-User-Id", userId.toString())
+                        .header("X-Idempotency-Key", "idem-ext-1")
+                        .contentType("application/json")
+                        .content(body))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.transferType").value("EXTERNAL"));
+    }
+
+    @Test
+    void transfer_externalWithoutRequiredFields_returns400() throws Exception {
+        UUID userId = UUID.randomUUID();
+        String body = objectMapper.writeValueAsString(new TransferRequest(
+                UUID.randomUUID(), TransferType.EXTERNAL, null, null, null, null, new BigDecimal("10.00")));
+
+        mockMvc.perform(post("/api/v1/payments/transfer")
+                        .header("X-User-Id", userId.toString())
+                        .header("X-Idempotency-Key", "idem-ext-2")
+                        .contentType("application/json")
+                        .content(body))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value(endsWith("/errors/invalid-request-body")));
+    }
 }
