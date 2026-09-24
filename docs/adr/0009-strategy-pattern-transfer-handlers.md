@@ -45,3 +45,14 @@ cada rama de forma aislada.
   handlers (no solo la interfaz), una desviación menor del Strategy
   pattern "puro" -- justificada por ser solo dos variantes fijas y
   conocidas de antemano (no un plugin system extensible).
+
+  ## Update (Fase 8)
+- `TransferCommand` pasa a `sealed interface` con dos records
+  (`Internal`, `External`). Cada variante valida sus propios campos por
+  construcción, igual que la invariante XOR de `Transaction`.
+- `ExternalTransferHandler` implementado; `TransferMoney` lo recibe como
+  segundo parámetro de constructor, tal como se anticipó.
+- `TransferMoneyCommand.of(...)` se reemplaza por `forInternal(...)` y
+  `forExternal(...)`.
+- `UnsupportedTransferTypeException` (scaffolding temporal) se elimina
+  junto con su handler.

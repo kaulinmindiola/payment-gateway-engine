@@ -54,3 +54,15 @@ por completo, no solo su velocidad.
   criterio de qué es un "duplicado"), y una duplicación de forma entre
   `application/usecase/Cached*Payload` e `infrastructure/web/*Response` que
   debe actualizarse en ambos lugares si el contrato de transferencia cambia.
+
+  ## Update (Fase 8)
+`IdempotencyPort` gana `release(key)`. Cuando `TransferMoney` captura una
+`AuthorizationTechnicalException` (timeout, 5xx o circuito abierto
+traducido por el fallback de ADR-0002), libera la key en vez de dejarla
+`IN_PROGRESS` hasta el TTL. Así, un reintento legítimo del cliente tras
+un 503 se ejecuta normalmente y no recibe un 409. La limitación original
+sigue aplicando solo a excepciones de programación
+(`IllegalArgumentException`), que son inalcanzables en la práctica
+porque Bean Validation las filtra antes. `CS-02` se mantiene: si el
+reintento persiste la transacción, el UNIQUE de `idempotency_key` sigue
+siendo el backstop.
