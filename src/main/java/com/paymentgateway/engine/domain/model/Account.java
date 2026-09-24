@@ -52,6 +52,10 @@ public final class Account {
         this.balance = this.balance.add(normalized);
     }
 
+    public boolean hasSufficientBalance(BigDecimal amount) {
+    return this.balance.compareTo(normalize(amount)) >= 0;
+    }
+
     public boolean isActive() {
         return this.status == AccountStatus.ACTIVE;
     }
