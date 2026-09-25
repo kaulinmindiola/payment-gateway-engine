@@ -1,6 +1,8 @@
 package com.paymentgateway.engine.application.usecase;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.paymentgateway.engine.application.exception.IdempotencyConflictException;
 import com.paymentgateway.engine.application.handler.ExternalTransferHandler;
 import com.paymentgateway.engine.application.handler.InternalTransferHandler;
@@ -13,8 +15,6 @@ import com.paymentgateway.engine.domain.port.TransactionRepositoryPort;
 import com.paymentgateway.engine.infrastructure.adapter.http.AuthorizationTimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -43,7 +43,11 @@ class TransferMoneyTest {
         idempotencyPort = mock(IdempotencyPort.class);
         transactionRepositoryPort = mock(TransactionRepositoryPort.class);
 
-        ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+        // Replicación exacta de la configuración por defecto de Spring Boot para Jackson
+        ObjectMapper objectMapper = JsonMapper.builder()
+                .findAndAddModules()
+                .disable(SerializationFeature.WRITE_DATES_AS_TIMESTAMPS)
+                .build();
 
         transferMoney = new TransferMoney(internalTransferHandler, externalTransferHandler,
                 idempotencyPort, transactionRepositoryPort, objectMapper);

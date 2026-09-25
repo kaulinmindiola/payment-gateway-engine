@@ -2,7 +2,6 @@ package com.paymentgateway.engine.application.usecase;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule; // <--- Importante
 import com.paymentgateway.engine.application.exception.IdempotencyConflictException;
 import com.paymentgateway.engine.application.handler.ExternalTransferHandler;
 import com.paymentgateway.engine.application.handler.InternalTransferHandler;
@@ -37,8 +36,7 @@ public class TransferMoney {
         this.externalTransferHandler = externalTransferHandler;
         this.idempotencyPort = idempotencyPort;
         this.transactionRepositoryPort = transactionRepositoryPort;
-        // registerModule garantiza el soporte de Instant/Java 8 Date-Time
-        this.objectMapper = objectMapper.copy().registerModule(new JavaTimeModule());
+        this.objectMapper = objectMapper;
     }
 
     public TransferOutcome execute(TransferMoneyCommand command) {
@@ -64,6 +62,12 @@ public class TransferMoney {
             cacheFailure(command.getIdempotencyKey(), ex);
             throw ex;
         } catch (AuthorizationTechnicalException ex) {
+            // Fase 8, Decisión 2: fallo TÉCNICO (timeout/5xx/circuito abierto).
+            // NO se cachea como resultado terminal: se LIBERA la key para que
+            // un reintento legítimo del cliente no espere el TTL de 24h.
+            // Ninguna Transaction se persiste (ExternalTransferHandler revirtió
+            // vía @Transactional). CS-02 sigue garantizado por el UNIQUE
+            // constraint si el reintento sí llega a persistir.
             idempotencyPort.release(command.getIdempotencyKey());
             throw ex;
         }
