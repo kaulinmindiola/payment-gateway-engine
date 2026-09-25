@@ -178,4 +178,15 @@ class PaymentControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.type").value(endsWith("/errors/invalid-request-body")));
     }
+    @Test
+        void transfer_withMalformedJsonBody_returns400ProblemDetailWithTraceId() throws Exception {
+        mockMvc.perform(post("/api/v1/payments/transfer")
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .header("X-Idempotency-Key", "idem-malformed")
+                        .contentType("application/json")
+                        .content("{\"sourceAccountId\": \"not-a-uuid\", \"amount\": \"abc\""))   // JSON roto
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.type").value(endsWith("/errors/malformed-request-body")))
+                .andExpect(jsonPath("$.traceId").exists());
+        }
 }

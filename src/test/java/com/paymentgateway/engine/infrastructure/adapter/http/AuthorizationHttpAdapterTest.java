@@ -5,6 +5,7 @@ import com.paymentgateway.engine.domain.port.AuthorizationRequest;
 import com.paymentgateway.engine.domain.port.AuthorizationResult;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
 import org.junit.jupiter.api.extension.RegisterExtension;
 import org.springframework.web.client.RestClient;
 
@@ -15,6 +16,7 @@ import static com.github.tomakehurst.wiremock.client.WireMock.*;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+
 
 class AuthorizationHttpAdapterTest {
 
@@ -96,4 +98,19 @@ class AuthorizationHttpAdapterTest {
                 .withRequestBody(matchingJsonPath("$.amount", equalTo("100.00")))
                 .withHeader("X-Idempotency-Key", equalTo("idem-key-1")));
     }
+    @Test
+        void authorize_propagatesCurrentTraceIdToProvider() {
+        wireMock.stubFor(post(urlEqualTo("/v1/authorizations")).willReturn(okJson("""
+                {"status":"APPROVED","providerReference":"AUTH-T","reason":null,"processedAt":"2026-01-01T00:00:00Z"}
+                """)));
+        MDC.put("traceId", "trace-propagated-1");
+        try {
+                adapter.authorize(sampleRequest());
+        } finally {
+                MDC.remove("traceId");
+        }
+
+        wireMock.verify(postRequestedFor(urlEqualTo("/v1/authorizations"))
+                .withHeader("X-Trace-Id", equalTo("trace-propagated-1")));
+        }
 }

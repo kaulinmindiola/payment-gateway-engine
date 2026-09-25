@@ -4,11 +4,20 @@ import com.paymentgateway.engine.application.exception.IdempotencyConflictExcept
 import com.paymentgateway.engine.application.exception.UnsupportedTransferTypeException;
 import com.paymentgateway.engine.domain.exception.*;
 import com.paymentgateway.engine.infrastructure.adapter.http.AuthorizationUnavailableException;
+import com.paymentgateway.engine.infrastructure.filter.TraceContext;
 
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.MDC;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ProblemDetail;
+import org.springframework.http.ResponseEntity;
+import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.mock.http.MockHttpInputMessage;
 import org.springframework.mock.web.MockHttpServletRequest;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -22,12 +31,61 @@ class GlobalExceptionHandlerTest {
         return request;
     }
 
+    @BeforeEach
+    void setTraceId() {
+        MDC.put(TraceContext.MDC_KEY, "unit-trace-1");
+    }
+
+    @AfterEach
+    void clearTraceId() {
+        MDC.remove(TraceContext.MDC_KEY);
+    }
+
+    @Test
+    void everyProblem_includesTraceIdFromMdc() {
+        ProblemDetail problem = handler.handleAccountNotFound(
+                new AccountNotFoundException("acc-1"), requestTo("/api/v1/accounts/acc-1"));
+
+        assertThat(problem.getProperties()).containsEntry("traceId", "unit-trace-1");
+    }
+
+    @Test
+    void handleUnreadableBody_mapsTo400WithoutLeakingParserDetails() {
+        HttpMessageNotReadableException ex = new HttpMessageNotReadableException(
+                "JSON parse error: Cannot deserialize value of type `java.math.BigDecimal`",
+                new MockHttpInputMessage(new byte[0]));
+
+        ProblemDetail problem = handler.handleUnreadableBody(ex, requestTo("/api/v1/payments/transfer"));
+
+        assertThat(problem.getStatus()).isEqualTo(400);
+        assertThat(problem.getType().toString()).endsWith("/errors/malformed-request-body");
+        assertThat(problem.getDetail()).doesNotContain("java.math");
+    }
+
+    @Test
+    void handleUnexpected_withUnknownException_returns500WithoutLeakingInternals() {
+        ResponseEntity<ProblemDetail> response = handler.handleUnexpected(
+                new IllegalStateException("secret internal detail: db password"), requestTo("/api/v1/accounts"));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(500);
+        assertThat(response.getBody().getType().toString()).endsWith("/errors/internal-error");
+        assertThat(response.getBody().getDetail()).doesNotContain("secret");
+        assertThat(response.getBody().getProperties()).containsEntry("traceId", "unit-trace-1");
+    }
+
+    @Test
+    void handleUnexpected_withSpringErrorResponse_keepsItsOwnStatus() {
+        ResponseEntity<ProblemDetail> response = handler.handleUnexpected(
+                new NoResourceFoundException(HttpMethod.GET, "api/v1/transactions"), requestTo("/api/v1/transactions"));
+
+        assertThat(response.getStatusCode().value()).isEqualTo(404);
+        assertThat(response.getBody().getType().toString()).endsWith("/errors/not-found");
+    }
+
     @Test
     void handleUserNotFound_mapsTo404WithCorrectTypeAndInstance() {
         UserNotFoundException ex = new UserNotFoundException("11111111-1111-1111-1111-111111111111");
-
         ProblemDetail problem = handler.handleUserNotFound(ex, requestTo("/api/v1/accounts"));
-
         assertThat(problem.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
         assertThat(problem.getType().toString()).endsWith("/errors/user-not-found");
         assertThat(problem.getDetail()).contains("11111111-1111-1111-1111-111111111111");
@@ -37,9 +95,7 @@ class GlobalExceptionHandlerTest {
     @Test
     void handleAccountNotFound_mapsTo404() {
         AccountNotFoundException ex = new AccountNotFoundException("acc-1");
-
         ProblemDetail problem = handler.handleAccountNotFound(ex, requestTo("/api/v1/accounts/acc-1"));
-
         assertThat(problem.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
         assertThat(problem.getType().toString()).endsWith("/errors/account-not-found");
     }
@@ -48,9 +104,7 @@ class GlobalExceptionHandlerTest {
     void handleUnsupportedTransferType_mapsTo400() {
         UnsupportedTransferTypeException ex =
                 new UnsupportedTransferTypeException(com.paymentgateway.engine.domain.model.TransferType.EXTERNAL);
-
         ProblemDetail problem = handler.handleUnsupportedTransferType(ex, requestTo("/api/v1/payments/transfer"));
-
         assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         assertThat(problem.getType().toString()).endsWith("/errors/unsupported-transfer-type");
     }
@@ -58,20 +112,15 @@ class GlobalExceptionHandlerTest {
     @Test
     void handleOwnershipViolation_mapsTo403() {
         OwnershipViolationException ex = new OwnershipViolationException("acc-1");
-
         ProblemDetail problem = handler.handleOwnershipViolation(ex, requestTo("/api/v1/accounts/acc-1"));
-
         assertThat(problem.getStatus()).isEqualTo(HttpStatus.FORBIDDEN.value());
         assertThat(problem.getType().toString()).endsWith("/errors/ownership-violation");
     }
 
     @Test
     void handleDomainException_catchAll_mapsUnhandledSubtypeTo422() {
-        // InvalidAmountException NO tiene handler propio -- debe caer en el catch-all.
         InvalidAmountException ex = new InvalidAmountException("Amount must be strictly positive");
-
         ProblemDetail problem = handler.handleDomainException(ex, requestTo("/api/v1/accounts"));
-
         assertThat(problem.getStatus()).isEqualTo(HttpStatus.UNPROCESSABLE_ENTITY.value());
         assertThat(problem.getType().toString()).endsWith("/errors/business-rule-violation");
         assertThat(problem.getDetail()).isEqualTo("Amount must be strictly positive");
@@ -105,9 +154,7 @@ class GlobalExceptionHandlerTest {
     void handleAuthorizationTechnical_mapsTo503WithoutLeakingInternalMessage() {
         AuthorizationUnavailableException ex =
                 new AuthorizationUnavailableException("internal: http://provider:8089 returned 503", null);
-
         ProblemDetail problem = handler.handleAuthorizationTechnical(ex, requestTo("/api/v1/payments/transfer"));
-
         assertThat(problem.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value());
         assertThat(problem.getType().toString()).endsWith("/errors/authorization-provider-unavailable");
         assertThat(problem.getDetail()).doesNotContain("http://provider");
@@ -116,9 +163,7 @@ class GlobalExceptionHandlerTest {
     @Test
     void handleInvalidQueryParameter_mapsTo400() {
         InvalidQueryParameterException ex = new InvalidQueryParameterException("dateFrom cannot be after dateTo", null);
-        
         ProblemDetail problem = handler.handleInvalidQueryParameter(ex, requestTo("/api/v1/accounts/123/transactions"));
-
         assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
         assertThat(problem.getType().toString()).endsWith("/errors/invalid-request-parameter");
         assertThat(problem.getDetail()).isEqualTo("dateFrom cannot be after dateTo");

@@ -36,6 +36,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -300,4 +301,27 @@ class AccountControllerTest {
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.type").value(endsWith("/errors/missing-required-header")));
     }
+    @Test
+        void history_withSizeExactly100_isAccepted() throws Exception {
+        given(getTransactionHistory.execute(any(), any())).willReturn(new PageResult<>(List.of(), 0, 100, 0, 0));
+
+        mockMvc.perform(get("/api/v1/accounts/{id}/transactions", UUID.randomUUID())
+                        .header("X-User-Id", UUID.randomUUID().toString())
+                        .queryParam("size", "100"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.size").value(100));
+        }
+
+        @Test
+        void anyRequest_echoesIncomingTraceIdInResponseHeader() throws Exception {
+        UUID userId = UUID.randomUUID();
+        Account account = Account.createNew(userId, new BigDecimal("50.00"));
+        given(getAccount.execute(any())).willReturn(account);
+
+        mockMvc.perform(get("/api/v1/accounts/{id}", account.getId())
+                        .header("X-User-Id", userId.toString())
+                        .header("X-Trace-Id", "wired-trace-001"))
+                .andExpect(status().isOk())
+                .andExpect(header().string("X-Trace-Id", "wired-trace-001"));
+        }
 }

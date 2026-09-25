@@ -69,6 +69,8 @@ class TransactionControllerTest {
     void globalTransactionListing_doesNotExist() throws Exception {
         mockMvc.perform(get("/api/v1/transactions")
                         .header("X-User-Id", UUID.randomUUID().toString()))
-                .andExpect(status().isNotFound());
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.status").value(404))
+                .andExpect(jsonPath("$.traceId").exists());
     }
 }
