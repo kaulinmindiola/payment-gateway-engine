@@ -64,3 +64,14 @@ Durante el mismo troubleshooting apareció una dependencia oculta:
 `contextLoads` usaba un Postgres local en 5432. Se migró a
 `PaymentGatewayEngineApplicationIT` sobre Testcontainers, con lo que la
 suite completa ya no depende de infraestructura local.
+
+## Update (Fase 10): divergencia entre entorno local y estado commiteado
+`maven-failsafe-plugin` (convención `*IT`, Fase 3) existió solo en el
+`pom.xml` local hasta el commit `d6c27a0` (Fase 9). La verificación de
+CS-01/CS-02 fue real en el entorno local (56 ITs ejecutados), pero los
+commits anteriores no reproducen la ejecución de tests de integración.
+En el mismo periodo, un incidente de copy-paste revirtió archivos de test
+ya corregidos. Se decide NO reescribir el historial (coste y riesgo
+altos, beneficio marginal). Mitigación estructural: CI (Fase 14) ejecuta
+`./mvnw verify` sobre el estado commiteado, lo que detecta este tipo de
+divergencia en cada push.

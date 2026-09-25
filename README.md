@@ -155,3 +155,11 @@ Incluye las transacciones donde la cuenta participa como **origen o destino**, o
 ```
 
 Solo el owner de la cuenta puede consultar su historial (`403` en otro caso; `404` si la cuenta no existe). No existe un listado global `GET /api/v1/transactions`.
+
+## Errores y trazabilidad (Fase 10)
+
+Todos los errores responden en RFC 7807 (`application/problem+json`) con
+`type`, `title`, `status`, `detail`, `instance` y `traceId`. Cada respuesta
+incluye el header `X-Trace-Id`: si envías uno válido se respeta; si no, se
+genera. El mismo valor aparece en los logs de la request. Ejemplos reales
+por código: [`docs/api/error-examples.md`](docs/api/error-examples.md).
