@@ -13,6 +13,8 @@ import com.paymentgateway.engine.domain.port.TransactionRepositoryPort;
 import com.paymentgateway.engine.infrastructure.adapter.http.AuthorizationTimeoutException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 
 import java.math.BigDecimal;
 import java.util.Optional;
@@ -40,8 +42,11 @@ class TransferMoneyTest {
         externalTransferHandler = mock(ExternalTransferHandler.class);
         idempotencyPort = mock(IdempotencyPort.class);
         transactionRepositoryPort = mock(TransactionRepositoryPort.class);
+
+        ObjectMapper objectMapper = new ObjectMapper().registerModule(new JavaTimeModule());
+
         transferMoney = new TransferMoney(internalTransferHandler, externalTransferHandler,
-                idempotencyPort, transactionRepositoryPort, new ObjectMapper());
+                idempotencyPort, transactionRepositoryPort, objectMapper);
     }
 
     private TransferMoneyCommand internalCommand(String idempotencyKey) {

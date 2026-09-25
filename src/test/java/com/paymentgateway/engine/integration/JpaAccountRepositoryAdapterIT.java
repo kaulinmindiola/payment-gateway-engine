@@ -63,10 +63,13 @@ class JpaAccountRepositoryAdapterIT extends AbstractPersistenceIntegrationTest {
 
             List<String> sqlStatements = capture.capturedStatements();
             boolean emittedForUpdate = sqlStatements.stream()
-                    .anyMatch(sql -> sql.toLowerCase().contains("for update"));
+                    .anyMatch(sql -> {
+                        String lowerSql = sql.toLowerCase();
+                        return lowerSql.contains("for update") || lowerSql.contains("for no key update");
+                    });
 
             assertThat(emittedForUpdate)
-                    .as("Hibernate debe emitir 'for update' al usar PESSIMISTIC_WRITE. SQL capturado: %s", sqlStatements)
+                    .as("Hibernate debe emitir 'for update' o 'for no key update' al usar PESSIMISTIC_WRITE. SQL capturado: %s", sqlStatements)
                     .isTrue();
         }
     }

@@ -6,9 +6,11 @@ import com.paymentgateway.engine.infrastructure.adapter.persistence.TransactionL
 import com.paymentgateway.engine.infrastructure.adapter.persistence.entity.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager; // ajustar al import confirmado en tu entorno
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.UUID;
 
@@ -46,7 +48,7 @@ class JpaTransactionLogRepositoryAdapterIT extends AbstractPersistenceIntegratio
         entityManager.persistAndFlush(new TransactionEntity(
                 txId, source, new BigDecimal("10.00"), "key-log-" + txId,
                 TransactionStatus.PENDING, null, TransferType.INTERNAL,
-                target, null, null, null));
+                target, null, null, null, Instant.now().truncatedTo(ChronoUnit.MICROS)));
 
         entityManager.flush();
         return txId;
@@ -72,9 +74,6 @@ class JpaTransactionLogRepositoryAdapterIT extends AbstractPersistenceIntegratio
 
     @Test
     void save_multipleLogsForSameTransaction_appendsRowsRatherThanOverwriting() {
-        // Invariante central del append-only: dos logs de la MISMA transacción
-        // deben coexistir como dos filas, no colapsar en una (contraste directo
-        // con Account/Transaction, donde save() sobre el mismo id actualiza).
         UUID txId = seedTransaction();
         entityManager.clear();
 

@@ -6,6 +6,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -58,6 +60,17 @@ class TransactionTest {
                     Transaction.createInternal(source, target, new BigDecimal("10.00"), " "))
                     .isInstanceOf(IllegalArgumentException.class);
         }
+
+        @Test
+        void createInternal_setsCreatedAtTruncatedToMicros() {
+            Transaction tx = Transaction.createInternal(
+                    UUID.randomUUID(), UUID.randomUUID(), new BigDecimal("10.00"), "key-created-at");
+
+            assertThat(tx.getCreatedAt()).isNotNull();
+            assertThat(tx.getCreatedAt().getNano() % 1_000)
+                    .as("precisión de microsegundos, igual que TIMESTAMPTZ")
+                    .isZero();
+        }
     }
 
     @Nested
@@ -68,7 +81,7 @@ class TransactionTest {
             Transaction tx = Transaction.reconstitute(
                     UUID.randomUUID(), source, new BigDecimal("10.00"), "key-4",
                     TransactionStatus.COMPLETED, null, TransferType.INTERNAL,
-                    target, null, null, null);
+                    target, null, null, null, Instant.parse("2026-01-01T00:00:00Z"));
 
             assertThat(tx.getStatus()).isEqualTo(TransactionStatus.COMPLETED);
         }
@@ -78,7 +91,7 @@ class TransactionTest {
             assertThatThrownBy(() -> Transaction.reconstitute(
                     UUID.randomUUID(), source, new BigDecimal("10.00"), "key-5",
                     TransactionStatus.PENDING, null, TransferType.INTERNAL,
-                    null, null, null, null))
+                    null, null, null, null, Instant.parse("2026-01-01T00:00:00Z")))
                     .isInstanceOf(InvalidTransactionTargetException.class);
         }
 
@@ -88,7 +101,7 @@ class TransactionTest {
             assertThatThrownBy(() -> Transaction.reconstitute(
                     UUID.randomUUID(), source, new BigDecimal("10.00"), "key-6",
                     TransactionStatus.PENDING, null, TransferType.INTERNAL,
-                    target, provider, bank, "REF"))
+                    target, provider, bank, "REF", Instant.parse("2026-01-01T00:00:00Z")))
                     .isInstanceOf(InvalidTransactionTargetException.class);
         }
 
@@ -97,7 +110,7 @@ class TransactionTest {
             Transaction tx = Transaction.reconstitute(
                     UUID.randomUUID(), source, new BigDecimal("10.00"), "key-7",
                     TransactionStatus.PENDING, null, TransferType.EXTERNAL,
-                    null, provider, bank, "REF");
+                    null, provider, bank, "REF", Instant.parse("2026-01-01T00:00:00Z"));
 
             assertThat(tx.getTransferType()).isEqualTo(TransferType.EXTERNAL);
         }
@@ -107,7 +120,7 @@ class TransactionTest {
             assertThatThrownBy(() -> Transaction.reconstitute(
                     UUID.randomUUID(), source, new BigDecimal("10.00"), "key-8",
                     TransactionStatus.PENDING, null, TransferType.EXTERNAL,
-                    null, provider, null, "REF"))
+                    null, provider, null, "REF", Instant.parse("2026-01-01T00:00:00Z")))
                     .isInstanceOf(InvalidTransactionTargetException.class);
         }
 
@@ -116,8 +129,17 @@ class TransactionTest {
             assertThatThrownBy(() -> Transaction.reconstitute(
                     UUID.randomUUID(), source, new BigDecimal("10.00"), "key-9",
                     TransactionStatus.PENDING, null, TransferType.EXTERNAL,
-                    target, provider, bank, "REF"))
+                    target, provider, bank, "REF", Instant.parse("2026-01-01T00:00:00Z")))
                     .isInstanceOf(InvalidTransactionTargetException.class);
+        }
+
+        @Test
+        void reconstitute_withNullCreatedAt_throws() {
+            assertThatThrownBy(() -> Transaction.reconstitute(
+                    UUID.randomUUID(), UUID.randomUUID(), new BigDecimal("10.00"), "key-null-created",
+                    TransactionStatus.PENDING, null, TransferType.INTERNAL,
+                    UUID.randomUUID(), null, null, null, null))
+                    .isInstanceOf(NullPointerException.class);
         }
     }
 

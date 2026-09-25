@@ -4,20 +4,15 @@ import com.paymentgateway.engine.domain.model.*;
 import com.paymentgateway.engine.infrastructure.adapter.persistence.entity.*;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager; // ajustar al import confirmado en tu entorno
+import org.springframework.boot.test.autoconfigure.orm.jpa.TestEntityManager;
 
 import java.math.BigDecimal;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
-/**
- * Smoke test de mapeo puro para TransactionLogEntity — sin adapter ni puerto,
- * porque TransactionLogRepositoryPort se define en Fase 5 (ver Plan Note,
- * Fase 3 Paso 2). Verifica solo que el schema/columnas/anotaciones JPA de
- * V6__create_transaction_logs.sql son correctas antes de construir lógica
- * de negocio sobre ellas.
- */
 class TransactionLogEntityPersistenceIT extends AbstractPersistenceIntegrationTest {
 
     @Autowired
@@ -40,7 +35,7 @@ class TransactionLogEntityPersistenceIT extends AbstractPersistenceIntegrationTe
         entityManager.persistAndFlush(new TransactionEntity(
                 txId, sourceId, new BigDecimal("10.00"), "key-log-smoke",
                 TransactionStatus.PENDING, null, TransferType.INTERNAL,
-                targetId, null, null, null));
+                targetId, null, null, null, Instant.now().truncatedTo(ChronoUnit.MICROS)));
 
         UUID logId = UUID.randomUUID();
         entityManager.persistAndFlush(

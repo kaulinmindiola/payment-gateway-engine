@@ -4,23 +4,23 @@ import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabas
 import org.springframework.boot.test.autoconfigure.orm.jpa.DataJpaTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 
 import static org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase.Replace.NONE;
+
 /**
- * Base para tests de persistencia (Fase 3+). Levanta un Postgres real vía
- * Testcontainers — @ServiceConnection conecta automáticamente el DataSource
- * del slice de test a este contenedor, sin tocar application.yml.
- * Flyway corre las 6 migraciones contra este contenedor efímero en cada
- * arranque de contexto (mismo comportamiento que contra pge-postgres local).
+ * Base para tests de persistencia (Fase 3+).
+ * Mantiene una única instancia de Postgres abierta durante toda la ejecución del build
+ * para ser compatible con el caché de contexto de Spring Boot.
  */
 @DataJpaTest
 @AutoConfigureTestDatabase(replace = NONE)
-@Testcontainers
 public abstract class AbstractPersistenceIntegrationTest {
 
-    @Container
     @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16");
+    static final PostgreSQLContainer<?> POSTGRES;
+
+    static {
+        POSTGRES = new PostgreSQLContainer<>("postgres:16");
+        POSTGRES.start(); // Inicia el contenedor una sola vez para toda la JVM
+    }
 }

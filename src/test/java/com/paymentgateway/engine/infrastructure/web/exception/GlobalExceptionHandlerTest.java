@@ -43,7 +43,8 @@ class GlobalExceptionHandlerTest {
         assertThat(problem.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
         assertThat(problem.getType().toString()).endsWith("/errors/account-not-found");
     }
-        @Test
+
+    @Test
     void handleUnsupportedTransferType_mapsTo400() {
         UnsupportedTransferTypeException ex =
                 new UnsupportedTransferTypeException(com.paymentgateway.engine.domain.model.TransferType.EXTERNAL);
@@ -75,6 +76,7 @@ class GlobalExceptionHandlerTest {
         assertThat(problem.getType().toString()).endsWith("/errors/business-rule-violation");
         assertThat(problem.getDetail()).isEqualTo("Amount must be strictly positive");
     }
+
     @Test
     void handleIdempotencyConflict_mapsTo409() {
         IdempotencyConflictException ex = new IdempotencyConflictException("dup-key");
@@ -84,29 +86,41 @@ class GlobalExceptionHandlerTest {
     }
 
     @Test
-void handleBlankHeader_mapsTo400() {
-    BlankHeaderException ex = new BlankHeaderException("X-Idempotency-Key");
-    ProblemDetail problem = handler.handleBlankHeader(ex, requestTo("/api/v1/payments/transfer"));
-    assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
-    assertThat(problem.getType().toString()).endsWith("/errors/invalid-request-parameter");
-}
+    void handleBlankHeader_mapsTo400() {
+        BlankHeaderException ex = new BlankHeaderException("X-Idempotency-Key");
+        ProblemDetail problem = handler.handleBlankHeader(ex, requestTo("/api/v1/payments/transfer"));
+        assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(problem.getType().toString()).endsWith("/errors/invalid-request-parameter");
+    }
 
-@Test
-void handleExternalBankNotFound_mapsTo404() {
-    ExternalBankNotFoundException ex = new ExternalBankNotFoundException("bank-1");
-    ProblemDetail problem = handler.handleExternalBankNotFound(ex, requestTo("/api/v1/external-banks/bank-1"));
-    assertThat(problem.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
-    assertThat(problem.getType().toString()).endsWith("/errors/external-bank-not-found");
-}
-@Test
-void handleAuthorizationTechnical_mapsTo503WithoutLeakingInternalMessage() {
-    AuthorizationUnavailableException ex =
-            new AuthorizationUnavailableException("internal: http://provider:8089 returned 503", null);
+    @Test
+    void handleExternalBankNotFound_mapsTo404() {
+        ExternalBankNotFoundException ex = new ExternalBankNotFoundException("bank-1");
+        ProblemDetail problem = handler.handleExternalBankNotFound(ex, requestTo("/api/v1/external-banks/bank-1"));
+        assertThat(problem.getStatus()).isEqualTo(HttpStatus.NOT_FOUND.value());
+        assertThat(problem.getType().toString()).endsWith("/errors/external-bank-not-found");
+    }
 
-    ProblemDetail problem = handler.handleAuthorizationTechnical(ex, requestTo("/api/v1/payments/transfer"));
+    @Test
+    void handleAuthorizationTechnical_mapsTo503WithoutLeakingInternalMessage() {
+        AuthorizationUnavailableException ex =
+                new AuthorizationUnavailableException("internal: http://provider:8089 returned 503", null);
 
-    assertThat(problem.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value());
-    assertThat(problem.getType().toString()).endsWith("/errors/authorization-provider-unavailable");
-    assertThat(problem.getDetail()).doesNotContain("http://provider");
-}
+        ProblemDetail problem = handler.handleAuthorizationTechnical(ex, requestTo("/api/v1/payments/transfer"));
+
+        assertThat(problem.getStatus()).isEqualTo(HttpStatus.SERVICE_UNAVAILABLE.value());
+        assertThat(problem.getType().toString()).endsWith("/errors/authorization-provider-unavailable");
+        assertThat(problem.getDetail()).doesNotContain("http://provider");
+    }
+
+    @Test
+    void handleInvalidQueryParameter_mapsTo400() {
+        InvalidQueryParameterException ex = new InvalidQueryParameterException("dateFrom cannot be after dateTo", null);
+        
+        ProblemDetail problem = handler.handleInvalidQueryParameter(ex, requestTo("/api/v1/accounts/123/transactions"));
+
+        assertThat(problem.getStatus()).isEqualTo(HttpStatus.BAD_REQUEST.value());
+        assertThat(problem.getType().toString()).endsWith("/errors/invalid-request-parameter");
+        assertThat(problem.getDetail()).isEqualTo("dateFrom cannot be after dateTo");
+    }
 }
