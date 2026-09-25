@@ -3,10 +3,10 @@ package com.paymentgateway.engine.infrastructure.adapter.http;
 import com.paymentgateway.engine.domain.port.AuthorizationPort;
 import com.paymentgateway.engine.domain.port.AuthorizationRequest;
 import com.paymentgateway.engine.domain.port.AuthorizationResult;
+import com.paymentgateway.engine.infrastructure.filter.TraceContext;
 
 import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
-import io.github.resilience4j.circuitbreaker.CallNotPermittedException;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
@@ -18,7 +18,6 @@ import org.springframework.web.client.RestClientException;
 
 import java.io.IOException;
 import java.time.Duration;
-import java.util.UUID;
 
 @Component
 public class AuthorizationHttpAdapter implements AuthorizationPort {
@@ -47,7 +46,7 @@ public class AuthorizationHttpAdapter implements AuthorizationPort {
                     .uri("/v1/authorizations")
                     .header("X-Provider-Code", request.getProviderCode())
                     .header("X-Idempotency-Key", request.getIdempotencyKey())
-                    .header("X-Trace-Id", generateTraceId())
+                    .header("X-Trace-Id", TraceContext.currentOrNew())
                     .body(body)
                     .retrieve()
                     .body(AuthorizationHttpResponseBody.class);
@@ -85,11 +84,5 @@ public class AuthorizationHttpAdapter implements AuthorizationPort {
      */
     private AuthorizationResult circuitOpenFallback(AuthorizationRequest request, CallNotPermittedException ex) {
         throw new AuthorizationUnavailableException("Circuit breaker is OPEN for authorization provider", ex);
-    }
-
-    private String generateTraceId() {
-        // Placeholder hasta Fase 10 (TraceIdFilter + MDC). Cumple el
-        // contrato HTTP obligatorio, aún no correlaciona con logs propios.
-        return UUID.randomUUID().toString();
     }
 }
