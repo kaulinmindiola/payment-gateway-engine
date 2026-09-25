@@ -12,4 +12,10 @@ public interface TransactionRepositoryPort {
     Optional<Transaction> findById(UUID id);
 
     Optional<Transaction> findByIdempotencyKey(String idempotencyKey);
+
+    /**
+     * BR-015: transacciones donde la cuenta es origen O destino, filtradas,
+     * ordenadas por createdAt DESC, id DESC (Decisión 6) y paginadas.
+     */
+    PageResult<Transaction> findHistory(TransactionHistoryQuery query);
 }
