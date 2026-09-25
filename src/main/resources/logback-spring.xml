@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  ADR-0005: correlación por traceId (TraceIdFilter + MDC), sin tracing distribuido.
+  - Perfil docker: JSON estructurado (logstash-logback-encoder), listo para agregadores.
+  - Resto de perfiles (local, tests): texto legible, con el mismo traceId.
+-->
+<configuration>
+
+    <!-- Se define ANTES de incluir los defaults de Spring Boot, que lo respetan si ya existe. -->
+    <property name="CONSOLE_LOG_PATTERN"
+              value="%d{yyyy-MM-dd'T'HH:mm:ss.SSSXXX} %5p [%15.15t] [traceId=%X{traceId:-}] %-40.40logger{39} : %m%n%wEx"/>
+
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <springProfile name="!docker">
+        <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="docker">
+        <appender name="JSON" class="ch.qos.logback.core.ConsoleAppender">
+            <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+                <!-- Solo traceId del MDC: se incluye explícitamente lo que se quiere
+                     exponer, en vez de volcar cualquier clave que alguien añada en el futuro. -->
+                <includeMdcKeyName>traceId</includeMdcKeyName>
+                <customFields>{"service":"payment-gateway-engine"}</customFields>
+            </encoder>
+        </appender>
+        <root level="INFO">
+            <appender-ref ref="JSON"/>
+        </root>
+    </springProfile>
+
+</configuration>
