@@ -39,3 +39,26 @@ servicios que justifique tracing distribuido (Micrometer Tracing, OTel).
   en `docs/api/error-examples.md`, regenerables con un script.
 - Sin trazas entre procesos: si el sistema se dividiera en servicios,
   habría que revisar esta decisión.
+
+  ## Update (Fase 11): health y métricas
+- Actuator expone únicamente `health` y `prometheus` (endpoints públicos,
+  sin autenticación, Sección 6 del contexto). `env`, `beans`, etc. no se
+  exponen porque pueden filtrar configuración.
+- `/actuator/health` muestra el estado de cada componente (`db`, `redis`,
+  `circuitBreakers`) pero no sus detalles (`show-details: never`): sin
+  versiones ni estado interno del circuito.
+- Circuito OPEN -> componente `circuitBreakers` DOWN
+  (`allowHealthIndicatorToFail: true`, explícito). HALF_OPEN -> UNKNOWN,
+  que no degrada el estado agregado.
+- Semántica del agregado: cualquier dependencia caída -> DOWN (HTTP 503),
+  según el contexto. El health responde "¿están sanas mis dependencias?",
+  NO "¿puedo atender tráfico?": sin Redis el sistema sigue siendo correcto
+  (ADR-0003) y con el circuito abierto las transferencias INTERNAL siguen
+  funcionando. Separar liveness/readiness solo tendría sentido con un
+  orquestador (fuera de alcance: Docker Compose, ADR-0006).
+- Métricas vía Micrometer + Prometheus, con el tag común
+  `application=payment-gateway-engine`. Las métricas de Resilience4j llegan
+  por `resilience4j-micrometer`. No se añaden métricas de negocio propias.
+- Reconfirmado: sin tracing distribuido (RISK-011).
+- En tests, Spring Boot desactiva la exportación de métricas por defecto;
+  `HealthEndpointOutageIT` la reactiva con `@AutoConfigureObservability`.

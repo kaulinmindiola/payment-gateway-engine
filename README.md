@@ -163,3 +163,18 @@ Todos los errores responden en RFC 7807 (`application/problem+json`) con
 incluye el header `X-Trace-Id`: si envías uno válido se respeta; si no, se
 genera. El mismo valor aparece en los logs de la request. Ejemplos reales
 por código: [`docs/api/error-examples.md`](docs/api/error-examples.md).
+
+## Observabilidad (Fase 11)
+
+| Endpoint | Descripción |
+|---|---|
+| `GET /actuator/health` | Estado agregado y por componente: `db` (PostgreSQL), `redis`, `circuitBreakers` (proveedor de autorización). Sin detalles internos. |
+| `GET /actuator/prometheus` | Métricas en formato Prometheus (JVM, HTTP, Resilience4j), con el tag `application="payment-gateway-engine"`. |
+
+```bash
+curl -s http://localhost:8080/actuator/health
+```
+
+Si cualquier dependencia falla (Postgres o Redis caídos, circuito abierto), el estado agregado es `DOWN` y la respuesta es `HTTP 503`.
+
+> **Nota de diseño**: el health indica si las **dependencias** están sanas, no si el sistema puede atender tráfico. Con Redis caído, las transferencias siguen siendo correctas (fallback a PostgreSQL, ADR-0003); con el circuito abierto, las transferencias INTERNAL siguen funcionando. Ver `ADR-0005`.

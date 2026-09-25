@@ -66,3 +66,12 @@ sigue aplicando solo a excepciones de programación
 porque Bean Validation las filtra antes. `CS-02` se mantiene: si el
 reintento persiste la transacción, el UNIQUE de `idempotency_key` sigue
 siendo el backstop.
+
+## Update (Fase 11): timeouts del cliente Redis
+El fallback a Postgres ante una caída de Redis solo es útil si se activa
+rápido. Lettuce espera por defecto hasta 60 s ante un Redis que no
+responde (partición de red, servidor colgado); un contenedor detenido, en
+cambio, rechaza la conexión al instante, por eso `RedisOutageIdempotencyIT`
+no lo detectaba. Se fijan `spring.data.redis.timeout` y
+`connect-timeout` en 500 ms. Verificado manualmente: con Redis detenido,
+`/actuator/health` responde en ~0,6 s.
