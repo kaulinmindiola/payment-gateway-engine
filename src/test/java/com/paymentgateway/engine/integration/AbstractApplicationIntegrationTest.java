@@ -6,8 +6,6 @@ import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
 import org.testcontainers.containers.GenericContainer;
 import org.testcontainers.containers.PostgreSQLContainer;
-import org.testcontainers.junit.jupiter.Container;
-import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 
 /**
@@ -18,20 +16,21 @@ import org.testcontainers.utility.DockerImageName;
  * completo con su gestor de transacciones.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
-@Testcontainers
 public abstract class AbstractApplicationIntegrationTest {
 
-    @Container
     @ServiceConnection
     static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16");
 
-    // GenericContainer manual -- sin módulo dedicado de Redis en Testcontainers
-    // sin depender de terceros. @ServiceConnection no aplica a GenericContainer para
-    // Redis directamente -- se configura la propiedad manualmente abajo.
-    @Container
     static final GenericContainer<?> REDIS = new GenericContainer<>(DockerImageName.parse("redis:7"))
             .withExposedPorts(6379);
     
+    // Arranca los contenedores una sola vez para toda la suite de pruebas (JVM).
+    // Spring reutilizará el Hikari pool y estos contenedores seguirán vivos.
+    static {
+        POSTGRES.start();
+        REDIS.start();
+    }
+
     // Evita que la contención del POOL de conexiones (default Hikari: 10)
     // se mezcle con la contención de LOCKS de fila que estos tests miden
     // deliberadamente (ver nota de diseño, Fase 5 Paso 7).
@@ -39,6 +38,7 @@ public abstract class AbstractApplicationIntegrationTest {
     static void increaseConnectionPoolForConcurrencyTests(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.hikari.maximum-pool-size", () -> "60");
     }
+
     @DynamicPropertySource
     static void redisProperties(DynamicPropertyRegistry registry) {
         registry.add("spring.data.redis.host", REDIS::getHost);
