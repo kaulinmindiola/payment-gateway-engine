@@ -131,3 +131,27 @@ curl -X POST http://localhost:8080/api/v1/payments/transfer \
 | `SWIFT-demo`, referencia terminada en `-DECLINE` | `201`, `FAILED` / `DECLINED` (resultado de negocio, sin reintento) |
 | `RAILS-flaky` | `201`, `COMPLETED` tras 503 → timeout → aprobado (reintentos internos) |
 | Proveedor caído / circuito abierto | `503`: no se ejecutó nada y se puede reintentar con la misma `X-Idempotency-Key` |
+
+## API — Historial de transacciones (Fase 9)
+
+```bash
+curl "http://localhost:8080/api/v1/accounts/<ACCOUNT_ID>/transactions?page=0&size=20&status=COMPLETED&transferType=INTERNAL&dateFrom=2026-01-01T00:00:00Z&dateTo=2026-02-01T00:00:00Z" \
+  -H "X-User-Id: <UUID del owner de la cuenta>"
+```
+
+| Parámetro | Descripción |
+|---|---|
+| `page` | Índice base 0 (default `0`) |
+| `size` | Default `20`, máximo `100` (valores fuera de rango → `400`) |
+| `status` | `PENDING`, `COMPLETED`, `FAILED` |
+| `transferType` | `INTERNAL`, `EXTERNAL` |
+| `dateFrom` | ISO-8601 UTC, **inclusivo** |
+| `dateTo` | ISO-8601 UTC, **exclusivo** |
+
+Incluye las transacciones donde la cuenta participa como **origen o destino**, ordenadas de la más reciente a la más antigua. Respuesta:
+
+```json
+{ "content": [ ... ], "page": 0, "size": 20, "totalElements": 3, "totalPages": 1 }
+```
+
+Solo el owner de la cuenta puede consultar su historial (`403` en otro caso; `404` si la cuenta no existe). No existe un listado global `GET /api/v1/transactions`.
