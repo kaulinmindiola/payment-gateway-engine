@@ -54,6 +54,12 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.BAD_REQUEST, "invalid-request-parameter", ex.getMessage(), request);
     }
 
+    // 400 -- parámetros de paginación/filtro fuera de rango (size > 100, page < 0, dateFrom > dateTo).
+    @ExceptionHandler(InvalidQueryParameterException.class)
+    public ProblemDetail handleInvalidQueryParameter(InvalidQueryParameterException ex, HttpServletRequest request) {
+        return problem(HttpStatus.BAD_REQUEST, "invalid-request-parameter", ex.getMessage(), request);
+    }
+
     // 403 — BR-008 (y BR-006/BR-014 en fases futuras): violación de ownership.
     @ExceptionHandler(OwnershipViolationException.class)
     public ProblemDetail handleOwnershipViolation(OwnershipViolationException ex, HttpServletRequest request) {
