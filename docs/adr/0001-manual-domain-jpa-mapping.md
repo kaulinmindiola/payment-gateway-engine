@@ -49,3 +49,16 @@ sería usar una librería de mapeo automático (MapStruct) entre ambos modelos.
 - El patrón create/update explícito (en vez de `Persistable<UUID>`) añade
   un `SELECT` extra en el camino de creación, aceptado porque esa ruta no
   es la que mide `CS-01` (transferencias entre cuentas ya existentes).
+
+  ## Update (Fase 9): createdAt de Transaction como dato de negocio
+Se reclasifica `Transaction.createdAt`: el momento en que ocurre un pago
+es información de negocio (se muestra, se filtra y ordena el historial,
+`BR-015`), no un metadato de persistencia. Lo genera el dominio en
+`createInternal`/`createExternal`, con el mismo precedente que
+`TransactionLog.createdAt` (Fase 2), truncado a microsegundos para
+coincidir con la precisión de `TIMESTAMPTZ` y garantizar el mismo valor en
+la respuesta del POST, en el replay idempotente y en cualquier GET.
+`TransactionEntity` deja de usar `@CreationTimestamp` para esa columna.
+El resto de la decisión original no cambia: `updatedAt` (todas las
+entidades) y `createdAt` de `Account`/`User` siguen siendo metadatos
+gestionados por Hibernate, fuera del dominio.

@@ -56,3 +56,8 @@ transacción bloquea una cuenta y espera indefinidamente la otra
   la duración de la transacción -- aceptable para el volumen que el
   proyecto declara (Sección 1 del contexto: portfolio, sin SLA productivo
   real, `CON-007`).
+
+  ## Update (Fase 9)
+Corrección: con el stack real (ADR-0012, Spring Boot 3.3.0) la versión es
+Hibernate 6.x, no 7. El comportamiento verificado no cambia: sobre
+PostgreSQL 16, `PESSIMISTIC_WRITE` se emite como `FOR NO KEY UPDATE`.
