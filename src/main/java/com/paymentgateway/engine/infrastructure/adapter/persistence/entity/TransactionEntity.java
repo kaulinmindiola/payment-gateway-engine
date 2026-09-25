@@ -3,7 +3,6 @@ package com.paymentgateway.engine.infrastructure.adapter.persistence.entity;
 import com.paymentgateway.engine.domain.model.TransactionStatus;
 import com.paymentgateway.engine.domain.model.TransferType;
 import jakarta.persistence.*;
-import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.math.BigDecimal;
@@ -49,7 +48,7 @@ public class TransactionEntity {
     @Column(name = "target_external_reference")
     private String targetExternalReference;
 
-    @CreationTimestamp
+    // Fase 9: createdAt viene del DOMINIO (dato de negocio). Sin @CreationTimestamp.
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
@@ -62,7 +61,7 @@ public class TransactionEntity {
     public TransactionEntity(UUID id, UUID sourceAccountId, BigDecimal amount, String idempotencyKey,
                               TransactionStatus status, String failureReason, TransferType transferType,
                               UUID targetAccountId, UUID targetProviderId, UUID targetBankId,
-                              String targetExternalReference) {
+                              String targetExternalReference, Instant createdAt) {
         this.id = id;
         this.sourceAccountId = sourceAccountId;
         this.amount = amount;
@@ -74,6 +73,7 @@ public class TransactionEntity {
         this.targetProviderId = targetProviderId;
         this.targetBankId = targetBankId;
         this.targetExternalReference = targetExternalReference;
+        this.createdAt = createdAt;
     }
 
     /** Solo status/failureReason cambian tras la creación (PENDING → COMPLETED/FAILED). */

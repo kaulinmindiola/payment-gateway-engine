@@ -5,6 +5,7 @@ import com.paymentgateway.engine.domain.model.TransactionStatus;
 import com.paymentgateway.engine.domain.model.TransferType;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 // idempotencyKey deliberadamente excluido -- campo de control interno,
@@ -19,13 +20,15 @@ public record TransactionResponse(
         BigDecimal amount,
         TransferType transferType,
         TransactionStatus status,
-        String failureReason
+        String failureReason,
+        Instant createdAt
 ) {
     public static TransactionResponse from(Transaction transaction) {
         return new TransactionResponse(
                 transaction.getId(), transaction.getSourceAccountId(), transaction.getTargetAccountId(),
                 transaction.getTargetProviderId(), transaction.getTargetBankId(),
                 transaction.getTargetExternalReference(), transaction.getAmount(),
-                transaction.getTransferType(), transaction.getStatus(), transaction.getFailureReason());
+                transaction.getTransferType(), transaction.getStatus(), transaction.getFailureReason(),
+                transaction.getCreatedAt());
     }
 }

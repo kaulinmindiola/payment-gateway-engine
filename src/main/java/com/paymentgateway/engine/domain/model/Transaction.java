@@ -5,6 +5,8 @@ import com.paymentgateway.engine.domain.exception.InvalidTransactionTargetExcept
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -21,11 +23,12 @@ public final class Transaction {
     private final UUID targetProviderId;
     private final UUID targetBankId;
     private final String targetExternalReference;
+    private final Instant createdAt;
 
     private Transaction(UUID id, UUID sourceAccountId, BigDecimal amount, String idempotencyKey,
-                         TransactionStatus status, String failureReason, TransferType transferType,
-                         UUID targetAccountId, UUID targetProviderId, UUID targetBankId,
-                         String targetExternalReference) {
+                        TransactionStatus status, String failureReason, TransferType transferType,
+                        UUID targetAccountId, UUID targetProviderId, UUID targetBankId,
+                        String targetExternalReference, Instant createdAt) {
         this.id = id;
         this.sourceAccountId = sourceAccountId;
         this.amount = amount;
@@ -37,10 +40,11 @@ public final class Transaction {
         this.targetProviderId = targetProviderId;
         this.targetBankId = targetBankId;
         this.targetExternalReference = targetExternalReference;
+        this.createdAt = createdAt;
     }
 
     public static Transaction createInternal(UUID sourceAccountId, UUID targetAccountId,
-                                              BigDecimal amount, String idempotencyKey) {
+                                             BigDecimal amount, String idempotencyKey) {
         Objects.requireNonNull(sourceAccountId, "sourceAccountId must not be null");
         Objects.requireNonNull(targetAccountId, "targetAccountId must not be null");
         BigDecimal normalizedAmount = requirePositiveAmount(amount);
@@ -49,13 +53,13 @@ public final class Transaction {
         return new Transaction(
                 UUID.randomUUID(), sourceAccountId, normalizedAmount, normalizedKey,
                 TransactionStatus.PENDING, null, TransferType.INTERNAL,
-                targetAccountId, null, null, null
+                targetAccountId, null, null, null, now()
         );
     }
 
     public static Transaction createExternal(UUID sourceAccountId, UUID targetProviderId, UUID targetBankId,
-                                              String targetExternalReference, BigDecimal amount,
-                                              String idempotencyKey) {
+                                             String targetExternalReference, BigDecimal amount,
+                                             String idempotencyKey) {
         Objects.requireNonNull(sourceAccountId, "sourceAccountId must not be null");
         Objects.requireNonNull(targetProviderId, "targetProviderId must not be null");
         Objects.requireNonNull(targetBankId, "targetBankId must not be null");
@@ -68,33 +72,34 @@ public final class Transaction {
         return new Transaction(
                 UUID.randomUUID(), sourceAccountId, normalizedAmount, normalizedKey,
                 TransactionStatus.PENDING, null, TransferType.EXTERNAL,
-                null, targetProviderId, targetBankId, targetExternalReference
+                null, targetProviderId, targetBankId, targetExternalReference, now()
         );
     }
 
     public static Transaction reconstitute(UUID id, UUID sourceAccountId, BigDecimal amount, String idempotencyKey,
-                                            TransactionStatus status, String failureReason, TransferType transferType,
-                                            UUID targetAccountId, UUID targetProviderId, UUID targetBankId,
-                                            String targetExternalReference) {
+                                           TransactionStatus status, String failureReason, TransferType transferType,
+                                           UUID targetAccountId, UUID targetProviderId, UUID targetBankId,
+                                           String targetExternalReference, Instant createdAt) {
         Objects.requireNonNull(id, "id must not be null");
         Objects.requireNonNull(sourceAccountId, "sourceAccountId must not be null");
         Objects.requireNonNull(amount, "amount must not be null");
         Objects.requireNonNull(idempotencyKey, "idempotencyKey must not be null");
         Objects.requireNonNull(status, "status must not be null");
         Objects.requireNonNull(transferType, "transferType must not be null");
+        Objects.requireNonNull(createdAt, "createdAt must not be null");
 
         validateTargetInvariant(transferType, targetAccountId, targetProviderId, targetBankId, targetExternalReference);
 
         return new Transaction(
                 id, sourceAccountId, amount.setScale(2, RoundingMode.HALF_EVEN), idempotencyKey,
                 status, failureReason, transferType,
-                targetAccountId, targetProviderId, targetBankId, targetExternalReference
+                targetAccountId, targetProviderId, targetBankId, targetExternalReference, createdAt
         );
     }
 
     private static void validateTargetInvariant(TransferType transferType, UUID targetAccountId,
-                                                 UUID targetProviderId, UUID targetBankId,
-                                                 String targetExternalReference) {
+                                                UUID targetProviderId, UUID targetBankId,
+                                                String targetExternalReference) {
         boolean hasInternalTarget = targetAccountId != null;
         boolean hasAnyExternalField = targetProviderId != null || targetBankId != null
                 || targetExternalReference != null;
@@ -151,6 +156,13 @@ public final class Transaction {
         return idempotencyKey;
     }
 
+    /**
+     * Truncado a microsegundos: coincide con la precisión de TIMESTAMPTZ en Postgres.
+     */
+    private static Instant now() {
+        return Instant.now().truncatedTo(ChronoUnit.MICROS);
+    }
+
     public UUID getId() { return id; }
     public UUID getSourceAccountId() { return sourceAccountId; }
     public BigDecimal getAmount() { return amount; }
@@ -162,4 +174,5 @@ public final class Transaction {
     public UUID getTargetProviderId() { return targetProviderId; }
     public UUID getTargetBankId() { return targetBankId; }
     public String getTargetExternalReference() { return targetExternalReference; }
+    public Instant getCreatedAt() { return createdAt; }
 }

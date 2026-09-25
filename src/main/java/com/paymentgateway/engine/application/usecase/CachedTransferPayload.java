@@ -5,6 +5,7 @@ import com.paymentgateway.engine.domain.model.TransactionStatus;
 import com.paymentgateway.engine.domain.model.TransferType;
 
 import java.math.BigDecimal;
+import java.time.Instant;
 import java.util.UUID;
 
 /**
@@ -16,13 +17,14 @@ import java.util.UUID;
 public record CachedTransferPayload(
         UUID id, UUID sourceAccountId, UUID targetAccountId, UUID targetProviderId, UUID targetBankId,
         String targetExternalReference, BigDecimal amount, TransferType transferType,
-        TransactionStatus status, String failureReason
+        TransactionStatus status, String failureReason, Instant createdAt
 ) {
     public static CachedTransferPayload from(Transaction transaction) {
         return new CachedTransferPayload(
                 transaction.getId(), transaction.getSourceAccountId(), transaction.getTargetAccountId(),
                 transaction.getTargetProviderId(), transaction.getTargetBankId(),
                 transaction.getTargetExternalReference(), transaction.getAmount(),
-                transaction.getTransferType(), transaction.getStatus(), transaction.getFailureReason());
+                transaction.getTransferType(), transaction.getStatus(), transaction.getFailureReason(),
+                transaction.getCreatedAt());
     }
 }
