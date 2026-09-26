@@ -28,10 +28,10 @@ public class TransferMoney {
     private final ObjectMapper objectMapper;
 
     public TransferMoney(InternalTransferHandler internalTransferHandler,
-                          ExternalTransferHandler externalTransferHandler,
-                          IdempotencyPort idempotencyPort,
-                          TransactionRepositoryPort transactionRepositoryPort,
-                          ObjectMapper objectMapper) {
+                         ExternalTransferHandler externalTransferHandler,
+                         IdempotencyPort idempotencyPort,
+                         TransactionRepositoryPort transactionRepositoryPort,
+                         ObjectMapper objectMapper) {
         this.internalTransferHandler = internalTransferHandler;
         this.externalTransferHandler = externalTransferHandler;
         this.idempotencyPort = idempotencyPort;
@@ -111,21 +111,16 @@ public class TransferMoney {
         }
     }
 
+    // Campos INTERNAL garantizados por TransferMoneyCommand.forInternal(...):
+    // un chequeo aquí sería inalcanzable (detectado en el análisis de cobertura, Fase 12).
     private TransferCommand toInternalCommand(TransferMoneyCommand command) {
-        if (command.getTargetAccountId() == null) {
-            throw new IllegalArgumentException("targetAccountId is required for INTERNAL transfers");
-        }
         return new TransferCommand.Internal(
                 command.getSourceAccountId(), command.getRequestingUserId(),
                 command.getTargetAccountId(), command.getAmount(), command.getIdempotencyKey());
     }
 
+    // Campos EXTERNAL garantizados por TransferMoneyCommand.forExternal(...).
     private TransferCommand toExternalCommand(TransferMoneyCommand command) {
-        if (command.getTargetProviderId() == null || command.getTargetBankId() == null
-                || command.getTargetExternalReference() == null) {
-            throw new IllegalArgumentException(
-                    "targetProviderId, targetBankId and targetExternalReference are required for EXTERNAL transfers");
-        }
         return new TransferCommand.External(
                 command.getSourceAccountId(), command.getRequestingUserId(), command.getTargetProviderId(),
                 command.getTargetBankId(), command.getTargetExternalReference(),
