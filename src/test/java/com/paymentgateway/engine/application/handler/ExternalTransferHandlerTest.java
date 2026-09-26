@@ -4,7 +4,6 @@ import com.paymentgateway.engine.application.fake.*;
 import com.paymentgateway.engine.domain.exception.*;
 import com.paymentgateway.engine.domain.model.*;
 import com.paymentgateway.engine.domain.port.AuthorizationPort;
-import com.paymentgateway.engine.domain.port.AuthorizationRequest;
 import com.paymentgateway.engine.domain.port.AuthorizationResult;
 import com.paymentgateway.engine.infrastructure.adapter.http.AuthorizationTimeoutException;
 import org.junit.jupiter.api.BeforeEach;
@@ -150,4 +149,34 @@ class ExternalTransferHandlerTest {
         assertThat(accountRepository.findById(source.getId()).orElseThrow().getBalance())
                 .isEqualByComparingTo("100.00"); // sin debit
     }
+
+    @Test
+void handle_nonExistentProvider_throwsInvalidExternalCounterpartyException() {
+TransferCommand.External command = new TransferCommand.External(source.getId(), ownerId,
+        UUID.randomUUID(), bank.getId(), "REF-001", new BigDecimal("10.00"), "key-" + UUID.randomUUID());
+
+assertThatThrownBy(() -> handler.handle(command))
+        .isInstanceOf(InvalidExternalCounterpartyException.class);
+verifyNoInteractions(authorizationPort);   // BR-013 se valida ANTES de llamar al proveedor
+}
+
+@Test
+void handle_nonExistentBank_throwsInvalidExternalCounterpartyException() {
+TransferCommand.External command = new TransferCommand.External(source.getId(), ownerId,
+        provider.getId(), UUID.randomUUID(), "REF-001", new BigDecimal("10.00"), "key-" + UUID.randomUUID());
+
+assertThatThrownBy(() -> handler.handle(command))
+        .isInstanceOf(InvalidExternalCounterpartyException.class);
+verifyNoInteractions(authorizationPort);
+}
+
+@Test
+void handle_inactiveBank_throwsInvalidExternalCounterpartyException() {
+bankRepository.seed(ExternalBank.reconstitute(bank.getId(), provider.getId(), bank.getCode(),
+        bank.getName(), bank.getCountry(), bank.getCurrency(), ExternalBankStatus.INACTIVE));
+
+assertThatThrownBy(() -> handler.handle(commandFor("10.00")))
+        .isInstanceOf(InvalidExternalCounterpartyException.class);
+verifyNoInteractions(authorizationPort);
+}
 }

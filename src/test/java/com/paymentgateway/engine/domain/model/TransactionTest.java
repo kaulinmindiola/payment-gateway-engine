@@ -7,7 +7,6 @@ import org.junit.jupiter.api.Test;
 
 import java.math.BigDecimal;
 import java.time.Instant;
-import java.time.temporal.ChronoUnit;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -45,6 +44,14 @@ class TransactionTest {
             assertThat(tx.getTargetProviderId()).isEqualTo(provider);
             assertThat(tx.getTargetBankId()).isEqualTo(bank);
             assertThat(tx.getTargetExternalReference()).isEqualTo("ES9121000418450200051332");
+        }
+
+        @Test
+        void createExternal_withBlankTargetExternalReference_throws() {
+            assertThatThrownBy(() -> Transaction.createExternal(
+                    UUID.randomUUID(), UUID.randomUUID(), UUID.randomUUID(),
+                    " ", new BigDecimal("10.00"), "key-blank-ref"))
+                    .isInstanceOf(IllegalArgumentException.class);
         }
 
         @Test
