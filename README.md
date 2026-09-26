@@ -178,3 +178,12 @@ curl -s http://localhost:8080/actuator/health
 Si cualquier dependencia falla (Postgres o Redis caídos, circuito abierto), el estado agregado es `DOWN` y la respuesta es `HTTP 503`.
 
 > **Nota de diseño**: el health indica si las **dependencias** están sanas, no si el sistema puede atender tráfico. Con Redis caído, las transferencias siguen siendo correctas (fallback a PostgreSQL, ADR-0003); con el circuito abierto, las transferencias INTERNAL siguen funcionando. Ver `ADR-0005`.
+
+## Calidad y cobertura (Fase 12)
+
+```bash
+./mvnw verify                          # tests + ArchUnit + gate de cobertura
+./mvnw jacoco:check@coverage-gate      # solo el gate (tras verify)
+```
+
+Gate: >= 80 % de líneas en `domain` + `application`, medido solo con tests unitarios. Reporte en `target/site/jacoco/index.html`. Análisis de las líneas no cubiertas: [`docs/testing/coverage-analysis.md`](docs/testing/coverage-analysis.md).
