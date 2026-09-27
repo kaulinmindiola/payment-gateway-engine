@@ -187,3 +187,52 @@ Si cualquier dependencia falla (Postgres o Redis caídos, circuito abierto), el 
 ```
 
 Gate: >= 80 % de líneas en `domain` + `application`, medido solo con tests unitarios. Reporte en `target/site/jacoco/index.html`. Análisis de las líneas no cubiertas: [`docs/testing/coverage-analysis.md`](docs/testing/coverage-analysis.md).
+
+## Quickstart (Docker Compose)
+
+Requisito: Docker con Docker Compose v2.
+
+```bash
+cp .env.example .env
+docker compose up --build -d
+curl http://localhost:8080/actuator/health     # {"status":"UP", ...}
+```
+
+Levanta 4 servicios: la aplicación, PostgreSQL 16, Redis 7 y un proveedor de autorización simulado (WireMock) con los mismos stubs que usan los tests. El perfil `docker` siembra datos de demo:
+
+| Dato demo | UUID |
+|---|---|
+| Usuario | `99999999-9999-9999-9999-999999999999` |
+| Provider `SWIFT-demo` (fiable) / banco DE | `10000000-...-000000000001` / `20000000-...-000000000001` |
+| Provider `RAILS-flaky` (503 → timeout → aprobado) / banco ES | `10000000-...-000000000002` / `20000000-...-000000000002` |
+
+Flujo de ejemplo:
+
+```bash
+BASE=http://localhost:8080/api/v1
+USER=99999999-9999-9999-9999-999999999999
+
+# Crear una cuenta (anota el "id" devuelto)
+curl -X POST $BASE/accounts -H "X-User-Id: $USER" -H "Content-Type: application/json" \
+  -d '{"initialBalance": 500.00}'
+
+# Transferencia EXTERNAL al proveedor fiable
+curl -X POST $BASE/payments/transfer -H "X-User-Id: $USER" \
+  -H "X-Idempotency-Key: demo-1" -H "Content-Type: application/json" \
+  -d '{"sourceAccountId":"<ID>","transferType":"EXTERNAL","targetProviderId":"10000000-0000-0000-0000-000000000001","targetBankId":"20000000-0000-0000-0000-000000000001","targetExternalReference":"ES9121000418450200051332","amount":50.00}'
+```
+
+Reiniciar la demo desde cero: `docker compose down -v`.
+
+### Problemas frecuentes
+
+- **Cambiaste las credenciales en `.env` y la app no autentica**: Postgres solo aplica las credenciales al inicializar un volumen vacío. Ejecuta `docker compose down -v`.
+- **Puerto 8080 u 8089 ocupado**: detén la aplicación local u otros contenedores que usen esos puertos (`SERVER_PORT` en `.env` cambia el puerto publicado de la app).
+- **No ejecutes `docker compose config` sin `--quiet`**: imprime la configuración resuelta, incluida la contraseña.
+
+### Ejecución local sin Docker para la aplicación
+
+```bash
+set -a; source .env; set +a      # Spring Boot no lee .env por sí solo
+./mvnw spring-boot:run
+```
