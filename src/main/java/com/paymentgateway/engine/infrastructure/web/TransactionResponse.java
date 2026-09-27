@@ -9,7 +9,7 @@ import java.time.Instant;
 import java.util.UUID;
 
 // idempotencyKey deliberadamente excluido -- campo de control interno,
-// no información de negocio (Decisión 4).
+// no información de negocio.
 public record TransactionResponse(
         UUID id,
         UUID sourceAccountId,

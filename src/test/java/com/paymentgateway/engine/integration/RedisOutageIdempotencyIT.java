@@ -27,13 +27,6 @@ import java.math.BigDecimal;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
-/**
- * RISK-003: caída de Redis NO debe producir una Transaction duplicada.
- * Contenedores de Redis NO-static y NO heredados de AbstractApplicationIntegrationTest
- * a propósito -- este test DETIENE Redis deliberadamente, y hacerlo sobre el
- * contenedor compartido de la base contaminaría el resto de la suite.
- */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.NONE)
 @Testcontainers
 class RedisOutageIdempotencyIT {

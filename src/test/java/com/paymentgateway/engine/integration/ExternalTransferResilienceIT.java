@@ -159,7 +159,7 @@ class ExternalTransferResilienceIT extends AbstractExternalProviderIntegrationTe
         assertThat(transactionsWithKey(key)).isZero();
         assertThat(balance(f.accountId())).isEqualByComparingTo("100.00");
         assertThat(redisTemplate.hasKey("idempotency:transfer:" + key))
-                .as("Decisión 2: la key se libera tras un fallo técnico")
+                .as("La key se libera tras un fallo técnico")
                 .isFalse();
 
         // 2) El proveedor se recupera (stub más reciente con misma prioridad gana).

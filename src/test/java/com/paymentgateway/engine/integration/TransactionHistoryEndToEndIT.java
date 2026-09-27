@@ -22,12 +22,6 @@ import java.util.List;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-
-/**
- * Fase 9: historial con transacciones creadas por los CASOS DE USO REALES
- * (Fases 5 y 8), no sembradas a mano. INTERNAL como origen y destino,
- * EXTERNAL aprobada y EXTERNAL rechazada (WireMock SWIFT-demo).
- */
 class TransactionHistoryEndToEndIT extends AbstractExternalProviderIntegrationTest {
 
     @Autowired private TransferMoney transferMoney;
@@ -125,9 +119,6 @@ class TransactionHistoryEndToEndIT extends AbstractExternalProviderIntegrationTe
 
     @Test
     void dateFrom_withCreatedAtReadBackFromDatabase_isInclusive() {
-        // Usa el createdAt tal como quedó persistido (no el valor en memoria):
-        // si el truncado a microsegundos del Paso 1 fallara, este borde
-        // inclusivo excluiría la transacción.
         Instant persistedCreatedAt = jdbcTemplate.queryForObject(
                 "SELECT created_at FROM transactions WHERE id = ?", java.sql.Timestamp.class,
                 externalApproved.getId()).toInstant();

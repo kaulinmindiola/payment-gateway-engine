@@ -16,9 +16,6 @@ public class JpaTransactionLogRepositoryAdapter implements TransactionLogReposit
 
     @Override
     public void save(TransactionLog log) {
-        // Append-only por diseño (Fase 2/3): siempre INSERT, nunca UPDATE.
-        // Sin patrón create/update (contrastar con JpaAccountRepositoryAdapter/
-        // JpaTransactionRepositoryAdapter) -- no hay estado mutable que proteger.
         transactionLogJpaRepository.save(toEntity(log));
     }
 

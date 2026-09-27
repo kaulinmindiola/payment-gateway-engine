@@ -23,8 +23,6 @@ public class GetTransaction {
         Transaction transaction = transactionRepositoryPort.findById(query.getTransactionId())
                 .orElseThrow(() -> new TransactionNotFoundException(query.getTransactionId().toString()));
 
-        // BR-009: accesible por el owner de ORIGEN o DESTINO. Ambas lecturas
-        // sin lock -- es un GET (mismo criterio que GetAccount, Fase 4).
         boolean isSourceOwner = accountRepositoryPort.findById(transaction.getSourceAccountId())
                 .map(account -> account.getOwnerId().equals(query.getRequestingUserId()))
                 .orElse(false);

@@ -24,7 +24,7 @@ import java.util.regex.Pattern;
 @Order(Ordered.HIGHEST_PRECEDENCE)
 public class TraceIdFilter extends OncePerRequestFilter {
 
-    // Decisión 2: el valor entrante es input NO confiable que acaba en los logs.
+    // El valor entrante es input NO confiable que acaba en los logs.
     // Solo se acepta si es seguro (sin saltos de línea -> sin log injection, longitud acotada).
     private static final Pattern SAFE_TRACE_ID = Pattern.compile("^[A-Za-z0-9-]{1,64}$");
 
@@ -38,8 +38,6 @@ public class TraceIdFilter extends OncePerRequestFilter {
         try {
             filterChain.doFilter(request, response);
         } finally {
-            // Decisión 4: los hilos de Tomcat se reutilizan. Sin esto, la siguiente
-            // request servida por este hilo heredaría el traceId.
             MDC.remove(TraceContext.MDC_KEY);
         }
     }

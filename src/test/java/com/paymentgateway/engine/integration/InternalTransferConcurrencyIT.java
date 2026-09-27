@@ -3,7 +3,6 @@ package com.paymentgateway.engine.integration;
 import com.paymentgateway.engine.application.usecase.TransferMoney;
 import com.paymentgateway.engine.application.usecase.TransferMoneyCommand;
 import com.paymentgateway.engine.domain.model.AccountStatus;
-import com.paymentgateway.engine.domain.model.TransferType;
 import com.paymentgateway.engine.domain.model.UserStatus;
 import com.paymentgateway.engine.infrastructure.adapter.persistence.AccountJpaRepository;
 import com.paymentgateway.engine.infrastructure.adapter.persistence.UserJpaRepository;

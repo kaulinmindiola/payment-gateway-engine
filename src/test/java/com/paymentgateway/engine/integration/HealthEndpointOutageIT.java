@@ -26,7 +26,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
 /**
- * Fase 11: /actuator/health refleja DOWN cuando una dependencia real falla.
+ * /actuator/health refleja DOWN cuando una dependencia real falla.
  * Contenedores DEDICADOS (no los singleton de AbstractApplicationIntegrationTest):
  * este test los detiene a propósito. Mismo criterio que RedisOutageIdempotencyIT.
  * Orden explícito: primero lo no destructivo, luego Redis y al final Postgres.

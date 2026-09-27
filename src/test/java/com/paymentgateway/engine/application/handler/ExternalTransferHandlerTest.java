@@ -132,7 +132,7 @@ class ExternalTransferHandlerTest {
         assertThatThrownBy(() -> handler.handle(commandFor("1000.00")))
                 .isInstanceOf(InsufficientBalanceException.class);
 
-        // BR-001 verificado ANTES de la llamada externa -- no se gasta
+        // verificado ANTES de la llamada externa -- no se gasta
         // presupuesto de circuit breaker en transferencias inviables.
         verifyNoInteractions(authorizationPort);
     }

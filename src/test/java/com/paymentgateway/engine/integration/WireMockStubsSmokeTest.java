@@ -16,7 +16,7 @@ import static org.assertj.core.api.Assertions.assertThat;
  * Valida los stubs versionados de wiremock/mappings/ de forma AISLADA,
  * sin pasar por Resilience4j ni AuthorizationHttpAdapter -- confirma que
  * el contrato de la Sección 7.1 está bien materializado antes de sumar
- * la complejidad de reintentos/circuit breaker (Paso 7).
+ * la complejidad de reintentos/circuit breaker.
  */
 class WireMockStubsSmokeTest extends AbstractExternalProviderIntegrationTest {
 

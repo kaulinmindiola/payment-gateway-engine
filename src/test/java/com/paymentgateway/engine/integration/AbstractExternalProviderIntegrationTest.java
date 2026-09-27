@@ -10,9 +10,6 @@ import org.springframework.test.context.DynamicPropertySource;
 import static com.github.tomakehurst.wiremock.core.WireMockConfiguration.wireMockConfig;
 
 /**
- * RISK-007: carga los MISMOS archivos de wiremock/mappings/ que usará el
- * WireMock standalone de docker-compose (Fase 13) -- .usingFilesUnderDirectory
- * apunta a la carpeta compartida en la raíz del repo.
  */
 public abstract class AbstractExternalProviderIntegrationTest extends AbstractApplicationIntegrationTest {
 

@@ -8,9 +8,9 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * Consulta de historial (BR-015). Filtros opcionales (null = sin filtro).
- * Intervalo de fechas semiabierto: dateFrom INCLUSIVO, dateTo EXCLUSIVO
- * (Decisión 5, Fase 9). La capa web valida primero y responde 400; esta
+ * Consulta de historial. Filtros opcionales (null = sin filtro).
+ * Intervalo de fechas semiabierto: dateFrom INCLUSIVO, dateTo EXCLUSIVO.
+ * La capa web valida primero y responde 400; esta
  * validación es defensa en profundidad para cualquier otro llamador.
  */
 public record TransactionHistoryQuery(

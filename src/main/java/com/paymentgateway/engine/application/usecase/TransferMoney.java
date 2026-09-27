@@ -62,12 +62,11 @@ public class TransferMoney {
             cacheFailure(command.getIdempotencyKey(), ex);
             throw ex;
         } catch (AuthorizationTechnicalException ex) {
-            // Fase 8, Decisión 2: fallo TÉCNICO (timeout/5xx/circuito abierto).
+            // fallo TÉCNICO (timeout/5xx/circuito abierto).
             // NO se cachea como resultado terminal: se LIBERA la key para que
             // un reintento legítimo del cliente no espere el TTL de 24h.
             // Ninguna Transaction se persiste (ExternalTransferHandler revirtió
-            // vía @Transactional). CS-02 sigue garantizado por el UNIQUE
-            // constraint si el reintento sí llega a persistir.
+            // vía @Transactional).
             idempotencyPort.release(command.getIdempotencyKey());
             throw ex;
         }
@@ -111,8 +110,6 @@ public class TransferMoney {
         }
     }
 
-    // Campos INTERNAL garantizados por TransferMoneyCommand.forInternal(...):
-    // un chequeo aquí sería inalcanzable (detectado en el análisis de cobertura, Fase 12).
     private TransferCommand toInternalCommand(TransferMoneyCommand command) {
         return new TransferCommand.Internal(
                 command.getSourceAccountId(), command.getRequestingUserId(),

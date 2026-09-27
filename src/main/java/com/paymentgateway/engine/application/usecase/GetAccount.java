@@ -16,12 +16,12 @@ public class GetAccount {
     }
 
     public Account execute(GetAccountQuery query) {
-        // Lectura sin lock -- es un GET, no una mutación (ver Decisión 1, Fase 2 Paso 5).
+        // Lectura sin lock -- es un GET, no una mutación.
         Account account = accountRepositoryPort.findById(query.getAccountId())
                 .orElseThrow(() -> new AccountNotFoundException(query.getAccountId().toString()));
 
-        // BR-008: solo el owner puede consultar. Se evalúa DESPUÉS de confirmar
-        // existencia -- orden intencional, ver nota de diseño arriba (RISK-006).
+        // solo el owner puede consultar. Se evalúa DESPUÉS de confirmar
+        // existencia -- orden intencional.
         if (!account.getOwnerId().equals(query.getRequestingUserId())) {
             throw new OwnershipViolationException(account.getId().toString());
         }

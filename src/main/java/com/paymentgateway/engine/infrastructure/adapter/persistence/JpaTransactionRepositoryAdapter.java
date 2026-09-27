@@ -17,7 +17,7 @@ import java.util.UUID;
 public class JpaTransactionRepositoryAdapter implements TransactionRepositoryPort {
 
     private static final Sort HISTORY_ORDER =
-            Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")); // Decisión 6: desempate determinista
+            Sort.by(Sort.Order.desc("createdAt"), Sort.Order.desc("id")); 
 
     private final TransactionJpaRepository transactionJpaRepository;
 
@@ -27,7 +27,6 @@ public class JpaTransactionRepositoryAdapter implements TransactionRepositoryPor
 
     @Override
     public void save(Transaction transaction) {
-        // Mismo patrón create/update que JpaAccountRepositoryAdapter (Paso 4):
         // evita que un merge() ingenuo pise created_at en una actualización.
         transactionJpaRepository.findById(transaction.getId()).ifPresentOrElse(
                 existing -> existing.applyChangesFrom(transaction.getStatus(), transaction.getFailureReason()),

@@ -44,10 +44,6 @@ public class RedisIdempotencyAdapter implements IdempotencyPort {
             return StoredResult.parse(existingValue).toClaim();
 
         } catch (Exception ex) {
-            // RISK-003 / ADR-0003: si Redis no responde, se deja pasar y se
-            // confía en el UNIQUE constraint de transactions.idempotency_key
-            // (backstop en Postgres, Fase 3). La corrección nunca depende de
-            // Redis -- solo la velocidad de respuesta ante un duplicado.
             log.warn("Redis unavailable during tryBegin for key '{}', falling back to Postgres UNIQUE constraint", idempotencyKey, ex);
             return IdempotencyClaim.acquired();
         }

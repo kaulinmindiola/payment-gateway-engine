@@ -48,7 +48,6 @@ public class TransactionEntity {
     @Column(name = "target_external_reference")
     private String targetExternalReference;
 
-    // Fase 9: createdAt viene del DOMINIO (dato de negocio). Sin @CreationTimestamp.
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 

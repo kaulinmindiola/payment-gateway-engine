@@ -29,13 +29,9 @@ public class GetTransactionHistory {
         Objects.requireNonNull(query, "query must not be null");
         Objects.requireNonNull(requestingUserId, "requestingUserId must not be null");
 
-        // Lectura sin lock: es una consulta, no una mutación.
         Account account = accountRepositoryPort.findById(query.accountId())
                 .orElseThrow(() -> new AccountNotFoundException(query.accountId().toString()));
 
-        // BR-014: solo el owner de la CUENTA CONSULTADA. Distinto de BR-009:
-        // participar como contraparte en alguna transacción no da acceso al
-        // historial de una cuenta ajena.
         if (!account.getOwnerId().equals(requestingUserId)) {
             throw new OwnershipViolationException(account.getId().toString());
         }

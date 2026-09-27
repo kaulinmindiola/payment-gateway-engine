@@ -60,8 +60,8 @@ class GetExternalBankTest {
     }
     @Test
     void execute_forInactiveBank_stillReturnsIt() {
-        // El catálogo de consulta NO filtra por status -- BR-013 filtra en
-        // Fase 8, al validar una transferencia EXTERNAL, no aquí.
+        // El catálogo de consulta NO filtra por status -- filtra en
+        // Al validar una transferencia EXTERNAL, no aquí.
         Provider provider = Provider.reconstitute(UUID.randomUUID(), "SWIFT-demo", "SWIFT", ProviderStatus.ACTIVE);
         providerRepository.seed(provider);
         ExternalBank inactiveBank = ExternalBank.reconstitute(

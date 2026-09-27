@@ -32,11 +32,6 @@ public class JpaAccountRepositoryAdapter implements AccountRepositoryPort {
 
     @Override
     public void save(Account account) {
-        // Actualización: la misma instancia gestionada por Hibernate en esta
-        // transacción (por ejemplo, la cargada vía findByIdForUpdate) se
-        // recupera del first-level cache — no dispara un segundo SELECT.
-        // Dirty checking persiste los cambios al hacer flush, sin tocar
-        // createdAt (ver decisión del Paso 2).
         accountJpaRepository.findById(account.getId()).ifPresentOrElse(
                 existing -> existing.applyChangesFrom(account.getBalance(), account.getStatus()),
                 () -> accountJpaRepository.save(toEntity(account))

@@ -28,9 +28,6 @@ import static org.mockito.BDDMockito.given;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 
 /**
- * Criterio de la Fase 10: el traceId de la respuesta coincide EXACTAMENTE con
- * el de los logs de esa request. Se verifica sobre el MDC de cada evento,
- * independiente del formato (texto o JSON).
  */
 @WebMvcTest(AccountController.class)
 class TraceIdLogCorrelationTest {

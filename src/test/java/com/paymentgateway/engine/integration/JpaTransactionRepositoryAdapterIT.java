@@ -116,11 +116,11 @@ class JpaTransactionRepositoryAdapterIT extends AbstractPersistenceIntegrationTe
     }
 
     /**
-     * RISK-012: backstop de base de datos. Simula un bypass del dominio
+     * backstop de base de datos. Simula un bypass del dominio
      * (insert SQL crudo, como podría ocurrir por un bug de migración o acceso
      * directo a la BD) con campos target mixtos para transfer_type=INTERNAL
      * (target_account_id Y target_provider_id/target_bank_id a la vez).
-     * El dominio (Fase 2, Transaction.reconstitute) ya rechaza esto en memoria;
+     * El dominio (Transaction.reconstitute) ya rechaza esto en memoria;
      * este test prueba que Postgres también lo rechaza, de forma independiente.
      */
     @Test

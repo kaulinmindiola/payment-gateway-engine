@@ -147,8 +147,6 @@ class JpaTransactionHistoryIT extends AbstractPersistenceIntegrationTest {
 
     @Test
     void identicalCreatedAt_paginationIsDeterministicWithoutDuplicatesOrGaps() {
-        // Decisión 6: sin desempate por id, dos filas con el mismo createdAt
-        // podrían repetirse u omitirse entre páginas.
         Instant tie = Instant.parse("2026-02-01T10:00:00Z");
         UUID a = internal(accountA, accountB, TransactionStatus.COMPLETED, tie);
         UUID b = internal(accountA, accountB, TransactionStatus.COMPLETED, tie);

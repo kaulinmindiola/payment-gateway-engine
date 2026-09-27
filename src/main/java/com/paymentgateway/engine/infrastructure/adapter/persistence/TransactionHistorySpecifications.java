@@ -5,9 +5,9 @@ import com.paymentgateway.engine.infrastructure.adapter.persistence.entity.Trans
 import org.springframework.data.jpa.domain.Specification;
 
 /**
- * Decisión 3 (Fase 9): cada filtro se añade SOLO si está presente. Se evita
+ * cada filtro se añade SOLO si está presente. Se evita
  * el patrón JPQL "(:param IS NULL OR ...)", que falla con parámetros nulos
- * tipados en Postgres. La base (cuenta origen O destino, BR-015) siempre
+ * tipados en Postgres. La base (cuenta origen O destino) siempre
  * existe, así que nunca se compone sobre una Specification nula.
  */
 final class TransactionHistorySpecifications {

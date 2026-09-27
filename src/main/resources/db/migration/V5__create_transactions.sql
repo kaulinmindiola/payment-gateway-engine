@@ -20,8 +20,6 @@ CREATE TABLE transactions (
 
     CONSTRAINT uq_transactions_idempotency_key UNIQUE (idempotency_key),
 
-    -- Backstop de RISK-012: espeja la invariante XOR ya garantizada en Transaction (dominio, Fase 2).
-    -- Si esto se rompe sin que el dominio lo rechace, es señal de bypass del dominio (acceso directo a BD, bug de migración).
     CONSTRAINT chk_transactions_target_exclusivity CHECK (
         (transfer_type = 'INTERNAL'
             AND target_account_id IS NOT NULL

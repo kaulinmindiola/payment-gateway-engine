@@ -20,12 +20,11 @@ public class CreateAccount {
 
     @Transactional
     public Account execute(CreateAccountCommand command) {
-        // BR-012: validado explícitamente aquí, no vía excepción de integridad de la DB.
         if (!userRepositoryPort.existsById(command.getOwnerId())) {
             throw new UserNotFoundException(command.getOwnerId().toString());
         }
 
-        // Account.createNew() ya fuerza status=ACTIVE y balance inicial >= 0 (Fase 2, BR-001).
+        // Account.createNew() ya fuerza status=ACTIVE y balance inicial >= 0 
         Account account = Account.createNew(command.getOwnerId(), command.getInitialBalance());
         accountRepositoryPort.save(account);
         return account;

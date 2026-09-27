@@ -126,7 +126,7 @@ class JpaAccountRepositoryAdapterIT extends AbstractPersistenceIntegrationTest {
         // Carga dentro de la misma transacción del test — findById() en save()
         // recuperará esta MISMA instancia gestionada (first-level cache).
         Account account = adapter().findByIdForUpdate(accountId);
-        account.credit(new BigDecimal("50.00")); // BR: Account.credit(), Fase 2
+        account.credit(new BigDecimal("50.00"));
 
         adapter().save(account);
         entityManager.flush();
