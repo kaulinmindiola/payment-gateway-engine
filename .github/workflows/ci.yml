@@ -6,7 +6,7 @@ on:
   push:
     branches: [main]
 
-# Mínimo privilegio por defecto. Solo publish-image amplía permisos.
+# Mínimo privilegio por defecto). Solo publish-image amplía permisos.
 permissions:
   contents: read
 
@@ -31,11 +31,11 @@ jobs:
           cache: maven
 
       # Unitarios + ArchUnit + integración con Testcontainers (incluye los tests
-      # de concurrencia y de resiliencia).
+      # de concurrencia y resiliencia).
       - name: Build and test
         run: ./mvnw -B verify
 
-      # Con @coverage-gate: sin él, jacoco:check corre sin reglas y siempre pasa.
+      # Con @coverage-gate: sin él, jacoco:check corre sin reglas y siempre pasa (Fase 12).
       - name: Coverage gate (domain + application)
         run: ./mvnw -B jacoco:check@coverage-gate
 
@@ -55,3 +55,42 @@ jobs:
           name: jacoco-report
           path: target/site/jacoco/
           if-no-files-found: ignore
+
+  docker-smoke:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create .env from template
+        run: cp .env.example .env
+
+      - name: Start the full environment
+        run: docker compose up -d --build --wait --wait-timeout 180
+
+      # --wait espera a los servicios con healthcheck; la aplicación no tiene uno,
+      # así que se reintenta hasta que Spring termina de arrancar.
+      - name: Wait for application health (CS-04)
+        run: |
+          for i in $(seq 1 30); do
+            if curl --fail --silent http://localhost:8080/actuator/health; then echo; exit 0; fi
+            sleep 2
+          done
+          echo "Application did not become healthy in time"
+          exit 1
+
+      # Perfil docker + Flyway + seed funcionando, no solo el proceso vivo.
+      - name: Verify seeded catalog
+        run: |
+          count=$(curl --fail --silent http://localhost:8080/api/v1/external-banks \
+            | python3 -c 'import sys,json; print(len(json.load(sys.stdin)))')
+          echo "Seeded external banks: $count"
+          test "$count" -eq 2
+
+      - name: Show logs on failure
+        if: failure()
+        run: docker compose logs --no-color
+
+      - name: Tear down
+        if: always()
+        run: docker compose down -v
