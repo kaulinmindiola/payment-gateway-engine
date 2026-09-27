@@ -1,5 +1,6 @@
 package com.paymentgateway.engine.infrastructure.adapter.http;
 
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.paymentgateway.engine.domain.port.AuthorizationPort;
 import com.paymentgateway.engine.domain.port.AuthorizationRequest;
 import com.paymentgateway.engine.domain.port.AuthorizationResult;
@@ -10,6 +11,7 @@ import io.github.resilience4j.circuitbreaker.annotation.CircuitBreaker;
 import io.github.resilience4j.retry.annotation.Retry;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
+import org.springframework.http.converter.HttpMessageNotReadableException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.HttpServerErrorException;
 import org.springframework.web.client.ResourceAccessException;
@@ -37,42 +39,49 @@ public class AuthorizationHttpAdapter implements AuthorizationPort {
     @CircuitBreaker(name = "authorizationProvider", fallbackMethod = "circuitOpenFallback")
     @Retry(name = "authorizationProvider")
     public AuthorizationResult authorize(AuthorizationRequest request) {
-        AuthorizationHttpRequestBody body = AuthorizationHttpRequestBody.from(request);
-
         try {
             AuthorizationHttpResponseBody response = restClient.post()
                     .uri("/v1/authorizations")
                     .header("X-Provider-Code", request.getProviderCode())
                     .header("X-Idempotency-Key", request.getIdempotencyKey())
                     .header("X-Trace-Id", TraceContext.currentOrNew())
-                    .body(body)
+                    .body(AuthorizationHttpRequestBody.from(request))
                     .retrieve()
                     .body(AuthorizationHttpResponseBody.class);
 
             if (response == null) {
-            throw new AuthorizationUnavailableException(
-            "Authorization provider returned an empty response body", null);
+                throw new AuthorizationProtocolException("Authorization provider returned an empty response body", null);
             }
-
             return response.toDomainResult();
 
-        } catch (ResourceAccessException ex) {
-            // Timeout de conexión (1s) o lectura (2s) -- sin respuesta HTTP.
-            throw new AuthorizationTimeoutException(
-                    "Authorization provider did not respond within the configured timeout", ex);
         } catch (HttpServerErrorException ex) {
-            // 500/502/503/504 del proveedor.
             throw new AuthorizationUnavailableException(
                     "Authorization provider returned a server error: " + ex.getStatusCode(), ex);
+        } catch (ResourceAccessException ex) {
+            throw new AuthorizationTimeoutException(
+                    "Authorization provider did not respond within the configured timeout", ex);
         } catch (RestClientException ex) {
-            // Timeout de lectura durante la extracción/deserialización del body (IOException en socket)
-            if (ex.getCause() instanceof IOException) {
+            if (hasCause(ex, HttpMessageNotReadableException.class) || hasCause(ex, JsonProcessingException.class)) {
+                throw new AuthorizationProtocolException("Authorization provider returned an unreadable response", ex);
+            }
+            if (hasCause(ex, IOException.class)) {
                 throw new AuthorizationTimeoutException(
                         "Authorization provider did not respond within the configured timeout", ex);
             }
             throw ex;
         }
-        
+    }
+
+    /**
+     * Helper para verificar recursivamente si la excepción fue causada por un tipo específico.
+     */
+    private static boolean hasCause(Throwable ex, Class<? extends Throwable> type) {
+        for (Throwable t = ex; t != null; t = t.getCause()) {
+            if (type.isInstance(t)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
