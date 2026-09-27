@@ -26,8 +26,6 @@ public class AuthorizationHttpAdapter implements AuthorizationPort {
 
     public AuthorizationHttpAdapter(RestClient.Builder restClientBuilder,
                                      @Value("${payment-gateway.authorization-provider.base-url}") String baseUrl) {
-        // Timeouts exactos de la Sección 11 del contexto -- independientes
-        // de Resilience4j (Paso 2), son del cliente HTTP subyacente.
         SimpleClientHttpRequestFactory factory = new SimpleClientHttpRequestFactory();
         factory.setConnectTimeout(Duration.ofSeconds(1));
         factory.setReadTimeout(Duration.ofSeconds(2));
@@ -51,6 +49,11 @@ public class AuthorizationHttpAdapter implements AuthorizationPort {
                     .retrieve()
                     .body(AuthorizationHttpResponseBody.class);
 
+            if (response == null) {
+            throw new AuthorizationUnavailableException(
+            "Authorization provider returned an empty response body", null);
+            }
+
             return response.toDomainResult();
 
         } catch (ResourceAccessException ex) {
@@ -69,9 +72,6 @@ public class AuthorizationHttpAdapter implements AuthorizationPort {
             }
             throw ex;
         }
-        // Un 4xx inesperado se propaga sin capturar -- extensión futura,
-        // fuera de alcance (Sección 22 del plan). APPROVED/DECLINED siempre
-        // llegan como 200 (Sección 7.1 del contexto), nunca como error HTTP.
         
     }
 
@@ -79,7 +79,7 @@ public class AuthorizationHttpAdapter implements AuthorizationPort {
      * Solo se invoca para CallNotPermittedException (circuito OPEN): el tipo
      * del segundo parámetro restringe el fallback a esa excepción; el resto
      * se propaga tal cual. La traduce a la jerarquía técnica propia para que
-     * TransferMoney libere la idempotency key (Fase 8, Decisión 2) sin que
+     * TransferMoney libere la idempotency key sin que
      * application/ conozca Resilience4j.
      */
     private AuthorizationResult circuitOpenFallback(AuthorizationRequest request, CallNotPermittedException ex) {
