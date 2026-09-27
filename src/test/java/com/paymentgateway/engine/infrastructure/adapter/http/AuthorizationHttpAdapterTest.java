@@ -113,4 +113,44 @@ class AuthorizationHttpAdapterTest {
         wireMock.verify(postRequestedFor(urlEqualTo("/v1/authorizations"))
                 .withHeader("X-Trace-Id", equalTo("trace-propagated-1")));
         }
+
+        @Test
+        void authorize_whenBodyIsEmpty_throwsProtocolException() {
+        wireMock.stubFor(post(urlEqualTo("/v1/authorizations")).willReturn(aResponse().withStatus(200)));
+
+        assertThatThrownBy(() -> adapter.authorize(sampleRequest()))
+                .isInstanceOf(AuthorizationProtocolException.class);
+        }
+
+        @Test
+        void authorize_whenStatusIsUnknown_throwsProtocolException() {
+        wireMock.stubFor(post(urlEqualTo("/v1/authorizations")).willReturn(okJson("""
+                {"status":"PENDING","providerReference":null,"reason":null,"processedAt":"2026-01-01T00:00:00Z"}
+                """)));
+
+        assertThatThrownBy(() -> adapter.authorize(sampleRequest()))
+                .isInstanceOf(AuthorizationProtocolException.class);
+        }
+
+        @Test
+        void authorize_whenDeclinedWithoutReason_throwsProtocolException() {
+        wireMock.stubFor(post(urlEqualTo("/v1/authorizations")).willReturn(okJson("""
+                {"status":"DECLINED","providerReference":null,"reason":null,"processedAt":"2026-01-01T00:00:00Z"}
+                """)));
+
+        assertThatThrownBy(() -> adapter.authorize(sampleRequest()))
+                .isInstanceOf(AuthorizationProtocolException.class);
+        }
+
+        @Test
+        void authorize_whenJsonIsMalformed_isProtocolFailure_notTimeout() {
+        wireMock.stubFor(post(urlEqualTo("/v1/authorizations")).willReturn(aResponse()
+                .withStatus(200)
+                .withHeader("Content-Type", "application/json")
+                .withBody("{not valid json")));
+
+        assertThatThrownBy(() -> adapter.authorize(sampleRequest()))
+                .isInstanceOf(AuthorizationProtocolException.class)
+                .isNotInstanceOf(AuthorizationTimeoutException.class);
+        }
 }
