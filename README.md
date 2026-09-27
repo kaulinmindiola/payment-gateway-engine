@@ -1,6 +1,5 @@
-cat > README.md << 'EOF'
 # Payment Gateway Engine
-
+[![CI](https://github.com/kaulinmindiola/payment-gateway-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/kaulinmindiola/payment-gateway-engine/actions/workflows/ci.yml)
 Motor de transferencias monetarias (core bancario simulado) que demuestra ingeniería de nivel producción en concurrencia, idempotencia y resiliencia.
 
 ## Desarrollo local (temporal, hasta Fase 13)
@@ -236,3 +235,19 @@ Reiniciar la demo desde cero: `docker compose down -v`.
 set -a; source .env; set +a      # Spring Boot no lee .env por sí solo
 ./mvnw spring-boot:run
 ```
+## CI/CD (Fase 14)
+
+Cada pull request y cada merge a `main` ejecutan el workflow [`ci.yml`](.github/workflows/ci.yml):
+
+| Job | Cuándo | Qué verifica |
+|---|---|---|
+| `build-and-test` | PR y `main` | `./mvnw verify` (unitarios, ArchUnit, integración con Testcontainers, concurrencia CS-01, resiliencia CS-02) y gate de cobertura `jacoco:check@coverage-gate` |
+| `docker-smoke` | PR y `main` | `docker compose up` desde el estado commiteado, `/actuator/health` en `UP` y catálogo sembrado (CS-04) |
+| `publish-image` | Solo tras merge a `main` | Publica la imagen en GHCR con los tags `latest` y el SHA del commit |
+
+`main` está protegida: solo admite cambios mediante pull request, con `build-and-test` y `docker-smoke` en verde.
+
+### Imagen publicada
+
+```bash
+docker pull ghcr.io/kaulinmindiola/payment-gateway-engine:latest
