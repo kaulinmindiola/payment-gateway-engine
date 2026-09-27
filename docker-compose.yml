@@ -1,0 +1,65 @@
+name: payment-gateway-engine
+
+services:
+
+  postgres:
+    image: postgres:16                 
+    environment:
+      POSTGRES_DB: ${DB_NAME:?DB_NAME must be set in .env}
+      POSTGRES_USER: ${DB_USERNAME:?DB_USERNAME must be set in .env}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD must be set in .env}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    # Sin "ports": solo accesible en la red interna.
+    healthcheck:
+      # $$ evita que Compose interpole: la variable la expande la shell del contenedor.
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  authorization-provider:
+    image: wiremock/wiremock:3.5.4
+    ports:
+      - "8089:8080"                         # solo para la demo: resetear el scenario, ver el journal
+    volumes:
+      - ./wiremock:/home/wiremock           # los MISMOS stubs que los tests (RISK-007)
+    healthcheck:
+      test: ["CMD", "curl", "-fs", "http://localhost:8080/__admin/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  application:
+    build: .
+    image: payment-gateway-engine:local
+    depends_on:                             # arranque determinista: nada de crash-loops
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      authorization-provider:
+        condition: service_healthy
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      REDIS_HOST: redis
+      REDIS_PORT: "6379"
+      AUTHORIZATION_PROVIDER_BASE_URL: http://authorization-provider:8080
+      DB_NAME: ${DB_NAME}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+    ports:
+      - "${SERVER_PORT:-8080}:8080"
+
+volumes:
+  postgres-data:
