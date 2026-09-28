@@ -64,6 +64,14 @@ class HealthEndpointOutageIT {
     void onlyHealthAndPrometheusAreExposed() throws Exception {
         mockMvc.perform(get("/actuator/env")).andExpect(status().isNotFound());
 
+        // springdoc is disabled outside the docker profile
+        mockMvc.perform(get("/v3/api-docs")).andExpect(status().isNotFound());
+        mockMvc.perform(get("/swagger-ui.html")).andExpect(status().isNotFound());
+
+        // Verifica que health sí está expuesto
+        mockMvc.perform(get("/actuator/health")).andExpect(status().isOk());
+
+        // Verifica que prometheus sí está expuesto
         mockMvc.perform(get("/actuator/prometheus"))
                 .andExpect(status().isOk())
                 .andExpect(content().string(containsString("resilience4j_circuitbreaker_state")))
