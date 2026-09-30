@@ -1,58 +1,25 @@
-# ADR-0009: Strategy pattern para handlers de transferencia por transfer_type
+# ADR-0009: Strategy Pattern for Transfer Handlers by Transfer Type
 
 ## Status
 Accepted
 
 ## Context
-El proyecto soporta dos tipos de transferencia con reglas y dependencias
-muy distintas: INTERNAL (dos cuentas propias del sistema, sin llamada
-externa, sin Resilience4j) y EXTERNAL (una cuenta propia + un proveedor
-externo simulado vía HTTP, con circuit breaker/retry). Mezclar ambos
-flujos en un único método con condicionales anidados degradaría
-rápidamente la legibilidad y dificultaría razonar sobre las reglas de
-cada rama de forma aislada.
+The project supports two types of transfers with very distinct rules and dependencies: INTERNAL (two internal accounts, no external calls, no Resilience4j) and EXTERNAL (one internal account + a simulated external provider via HTTP, with circuit breaker/retries). Mixing both flows in a single method with nested conditionals would quickly degrade readability and make it difficult to reason about the rules of each branch in isolation.
 
 ## Decision
-- `TransferHandler` (`application/handler/`) define el contrato común:
-  `Transaction handle(TransferCommand command)`.
-- `InternalTransferHandler` (Fase 5) implementa la rama INTERNAL: valida
-  `BR-003/006/007`, aplica `LockOrderPolicy`, ejecuta débito+crédito+registro
-  en una única transacción ACID (`BR-004`). Sin `AuthorizationPort`.
-- `ExternalTransferHandler` (Fase 8) implementará la rama EXTERNAL con el
-  mismo contrato, añadiendo `AuthorizationPort` + Resilience4j.
-- `TransferMoney` (`application/usecase/`) sigue siendo el único punto de
-  entrada del caso de uso. Como Spring no puede resolver de forma
-  ambigua una inyección genérica de `TransferHandler` cuando existan dos
-  implementaciones concretas, `TransferMoney` inyecta cada handler por
-  su TIPO CONCRETO (`InternalTransferHandler` desde Fase 5;
-  `ExternalTransferHandler` se añade como segundo parámetro en Fase 8) y
-  despacha manualmente vía `switch` sobre `TransferType` -- no se usa
-  `Map<TransferType, TransferHandler>` ni resolución dinámica por nombre
-  de bean, evitando complejidad no justificada para solo dos variantes.
-- Mientras `ExternalTransferHandler` no exista, `transfer_type=EXTERNAL`
-  responde `400` vía `UnsupportedTransferTypeException` (scaffolding
-  temporal, no una regla de negocio -- ver Fase 5, Paso 4).
+- `TransferHandler` (`application/handler/`) defines the common contract: `Transaction handle(TransferCommand command)`.
+- `InternalTransferHandler` (Phase 5) implements the INTERNAL branch: validates `BR-003/006/007`, applies `LockOrderPolicy`, and executes debit+credit+log in a single ACID transaction (`BR-004`). No `AuthorizationPort`.
+- `ExternalTransferHandler` (Phase 8) will implement the EXTERNAL branch with the same contract, adding `AuthorizationPort` + Resilience4j.
+- `TransferMoney` (`application/usecase/`) remains the single entry point for the use case. Since Spring cannot unambiguously resolve a generic `TransferHandler` injection when two concrete implementations exist, `TransferMoney` injects each handler by its CONCRETE TYPE (`InternalTransferHandler` since Phase 5; `ExternalTransferHandler` added as a second parameter in Phase 8) and manually dispatches via `switch` on `TransferType` -- `Map<TransferType, TransferHandler>` or dynamic resolution by bean name is not used, avoiding unjustified complexity for only two variants.
+- While `ExternalTransferHandler` does not exist, `transfer_type=EXTERNAL` returns `400` via `UnsupportedTransferTypeException` (temporary scaffolding, not a business rule -- see Phase 5, Step 4).
 
 ## Consequences
-- Cada handler es testeable de forma aislada con sus propios fakes
-  (`InternalTransferHandlerTest`), sin necesidad de simular reglas de la
-  otra rama.
-- Añadir un tercer `TransferType` en el futuro (fuera de alcance actual)
-  requeriría: una nueva implementación de `TransferHandler`, un nuevo
-  parámetro de constructor en `TransferMoney`, y una nueva rama en el
-  `switch` -- cambio localizado, no un refactor de todo el flujo.
-- Costo aceptado: `TransferMoney` conoce los tipos concretos de los
-  handlers (no solo la interfaz), una desviación menor del Strategy
-  pattern "puro" -- justificada por ser solo dos variantes fijas y
-  conocidas de antemano (no un plugin system extensible).
+- Each handler is testable in isolation with its own fakes (`InternalTransferHandlerTest`), without needing to simulate rules from the other branch.
+- Adding a third `TransferType` in the future (currently out of scope) would require: a new `TransferHandler` implementation, a new constructor parameter in `TransferMoney`, and a new branch in the `switch` -- a localized change, not a full flow refactoring.
+- Accepted cost: `TransferMoney` knows the concrete types of the handlers (not just the interface), a minor deviation from the "pure" Strategy pattern -- justified by having only two fixed, predetermined variants (not an extensible plugin system).
 
-  ## Update (Fase 8)
-- `TransferCommand` pasa a `sealed interface` con dos records
-  (`Internal`, `External`). Cada variante valida sus propios campos por
-  construcción, igual que la invariante XOR de `Transaction`.
-- `ExternalTransferHandler` implementado; `TransferMoney` lo recibe como
-  segundo parámetro de constructor, tal como se anticipó.
-- `TransferMoneyCommand.of(...)` se reemplaza por `forInternal(...)` y
-  `forExternal(...)`.
-- `UnsupportedTransferTypeException` (scaffolding temporal) se elimina
-  junto con su handler.
+## Update (Phase 8)
+- `TransferCommand` becomes a `sealed interface` with two records (`Internal`, `External`). Each variant validates its own fields upon construction, just like the XOR invariant of `Transaction`.
+- `ExternalTransferHandler` implemented; `TransferMoney` receives it as a second constructor parameter, as anticipated.
+- `TransferMoneyCommand.of(...)` is replaced by `forInternal(...)` and `forExternal(...)`.
+- `UnsupportedTransferTypeException` (temporary scaffolding) is removed along with its handler.
