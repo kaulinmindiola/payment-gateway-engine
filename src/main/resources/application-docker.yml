@@ -7,3 +7,7 @@ springdoc:
     enabled: true
   swagger-ui:
     enabled: true
+    persist-authorization: true       # identity survives page reloads
+    try-it-out-enabled: true          # operations open ready to execute
+    display-request-duration: true    # shows the retry time of the flaky provider
+    doc-expansion: list

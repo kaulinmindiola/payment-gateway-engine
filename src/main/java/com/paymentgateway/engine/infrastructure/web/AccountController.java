@@ -14,6 +14,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -23,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 import java.time.Instant;
 import java.util.UUID;
 
+@SecurityRequirement(name = "userId")
 @Tag(name = "Accounts")
 @RestController
 @RequestMapping("/api/v1/accounts")
@@ -45,7 +47,7 @@ public class AccountController {
     @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound")
     @PostMapping
     public ResponseEntity<AccountResponse> create(
-            @Parameter(description = "Requesting user ID") @RequestHeader("X-User-Id") UUID userId,
+            @Parameter(hidden = true) @RequestHeader("X-User-Id") UUID userId,
             @Valid @RequestBody CreateAccountRequest request) {
 
         Account account = createAccount.execute(
@@ -61,7 +63,8 @@ public class AccountController {
     @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound")
     @GetMapping("/{id}")
     public ResponseEntity<AccountResponse> get(
-            @Parameter(description = "Requesting user; must own the account") @RequestHeader("X-User-Id") UUID userId,
+            @Parameter(hidden = true) @RequestHeader("X-User-Id") UUID userId,
+            @Parameter(description = "Account id", example = "30000000-0000-0000-0000-000000000001")
             @PathVariable UUID id) {
 
         Account account = getAccount.execute(GetAccountQuery.of(id, userId));
@@ -79,7 +82,8 @@ public class AccountController {
     @ApiResponse(responseCode = "404", ref = "#/components/responses/NotFound")
     @GetMapping("/{id}/transactions")
     public PageResponse<TransactionResponse> history(
-            @Parameter(description = "Requesting user; must own the account") @RequestHeader("X-User-Id") UUID userId,
+            @Parameter(hidden = true) @RequestHeader("X-User-Id") UUID userId,
+            @Parameter(description = "Account id", example = "30000000-0000-0000-0000-000000000001")
             @PathVariable UUID id,
             @Parameter(description = "Zero-based page index", schema = @Schema(minimum = "0", defaultValue = "0"))
             @RequestParam(defaultValue = "0") int page,

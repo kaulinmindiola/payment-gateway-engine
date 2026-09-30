@@ -1,9 +1,12 @@
 openapi: 3.0.1
 info:
-  description: "Internal and external transfers with pessimistic locking, dual idempotency\
-    \ and a resilient provider integration. Every error follows RFC 7807 (application/problem+json)\
-    \ and includes a traceId that matches the X-Trace-Id response header and the server\
-    \ logs."
+  description: |
+    Internal and external transfers with pessimistic locking, dual idempotency and a resilient provider integration. Every error follows RFC 7807 (application/problem+json) and includes a traceId that matches the X-Trace-Id response header and the server logs.
+
+    **Interactive Tour (docker profile)**
+    1. Click **Authorize** and enter Alice's seeded demo user: `99999999-9999-9999-9999-999999999999`
+    2. Open `POST /api/v1/payments/transfer`, click **Try it out**, and select any of the 5 ready-to-use examples from the dropdown. Click **Execute**!
+    3. Open `GET /api/v1/accounts/{id}/transactions` and click **Execute** (the account id is already pre-filled) to see Alice's history.
   title: Payment Gateway Engine API
   version: v1
 servers:
@@ -13,14 +16,6 @@ paths:
   /api/v1/accounts:
     post:
       operationId: create
-      parameters:
-      - description: Requesting user ID
-        in: header
-        name: X-User-Id
-        required: true
-        schema:
-          type: string
-          format: uuid
       requestBody:
         content:
           application/json:
@@ -38,6 +33,8 @@ paths:
           $ref: "#/components/responses/BadRequest"
         "404":
           $ref: "#/components/responses/NotFound"
+      security:
+      - userId: []
       summary: Create a new account
       tags:
       - Accounts
@@ -45,14 +42,9 @@ paths:
     get:
       operationId: get_1
       parameters:
-      - description: Requesting user; must own the account
-        in: header
-        name: X-User-Id
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - in: path
+      - description: Account id
+        example: 30000000-0000-0000-0000-000000000001
+        in: path
         name: id
         required: true
         schema:
@@ -71,6 +63,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+      security:
+      - userId: []
       summary: Get account details
       tags:
       - Accounts
@@ -81,14 +75,9 @@ paths:
         \ it. There is no global transaction listing by design."
       operationId: history
       parameters:
-      - description: Requesting user; must own the account
-        in: header
-        name: X-User-Id
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - in: path
+      - description: Account id
+        example: 30000000-0000-0000-0000-000000000001
+        in: path
         name: id
         required: true
         schema:
@@ -156,6 +145,8 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+      security:
+      - userId: []
       summary: Transaction history of an account
       tags:
       - Accounts
@@ -208,14 +199,9 @@ paths:
         \ status FAILED and failureReason DECLINED."
       operationId: transfer
       parameters:
-      - description: Requesting user; must own the source account
-        in: header
-        name: X-User-Id
-        required: true
-        schema:
-          type: string
-          format: uuid
-      - description: Unique key per logical transfer; reuse it to retry safely
+      - description: "Any unique text per transfer (tour-001, tour-002...). Send the\
+          \ same key again to see the idempotent replay: same response, no second\
+          \ debit."
         in: header
         name: X-Idempotency-Key
         required: true
@@ -224,6 +210,49 @@ paths:
       requestBody:
         content:
           application/json:
+            examples:
+              "1. INTERNAL: Alice checking -> savings":
+                description: "1. INTERNAL: Alice checking -> savings"
+                value:
+                  sourceAccountId: 30000000-0000-0000-0000-000000000001
+                  transferType: INTERNAL
+                  targetAccountId: 30000000-0000-0000-0000-000000000002
+                  amount: 100.0
+              "2. EXTERNAL: reliable provider (SWIFT-demo)":
+                description: "2. EXTERNAL: reliable provider (SWIFT-demo)"
+                value:
+                  sourceAccountId: 30000000-0000-0000-0000-000000000001
+                  transferType: EXTERNAL
+                  targetProviderId: 10000000-0000-0000-0000-000000000001
+                  targetBankId: 20000000-0000-0000-0000-000000000001
+                  targetExternalReference: ES9121000418450200051332
+                  amount: 50.0
+              "3. EXTERNAL: flaky provider, recovered by retries (~3 s)":
+                description: "3. EXTERNAL: flaky provider, recovered by retries (~3\
+                  \ s)"
+                value:
+                  sourceAccountId: 30000000-0000-0000-0000-000000000001
+                  transferType: EXTERNAL
+                  targetProviderId: 10000000-0000-0000-0000-000000000002
+                  targetBankId: 20000000-0000-0000-0000-000000000002
+                  targetExternalReference: REF-FLAKY
+                  amount: 30.0
+              "4. Error 422: insufficient balance":
+                description: "4. Error 422: insufficient balance"
+                value:
+                  sourceAccountId: 30000000-0000-0000-0000-000000000001
+                  transferType: INTERNAL
+                  targetAccountId: 30000000-0000-0000-0000-000000000002
+                  amount: 999999.0
+              "5. Error 503: provider down (retries exhausted)":
+                description: "5. Error 503: provider down (retries exhausted)"
+                value:
+                  sourceAccountId: 30000000-0000-0000-0000-000000000001
+                  transferType: EXTERNAL
+                  targetProviderId: 10000000-0000-0000-0000-000000000002
+                  targetBankId: 20000000-0000-0000-0000-000000000002
+                  targetExternalReference: REF-CB-ALWAYS-FAIL
+                  amount: 10.0
             schema:
               $ref: "#/components/schemas/TransferRequest"
         required: true
@@ -246,6 +275,8 @@ paths:
           $ref: "#/components/responses/UnprocessableEntity"
         "503":
           $ref: "#/components/responses/ServiceUnavailable"
+      security:
+      - userId: []
       summary: Transfer money (INTERNAL or EXTERNAL)
       tags:
       - Payments
@@ -253,13 +284,6 @@ paths:
     get:
       operationId: get
       parameters:
-      - description: Requesting user; must own the source or target account
-        in: header
-        name: X-User-Id
-        required: true
-        schema:
-          type: string
-          format: uuid
       - in: path
         name: id
         required: true
@@ -279,9 +303,32 @@ paths:
           $ref: "#/components/responses/Forbidden"
         "404":
           $ref: "#/components/responses/NotFound"
+      security:
+      - userId: []
       summary: Get transaction details
       tags:
       - Transactions
+  /api/v1/users/me:
+    get:
+      description: "Returns the identity behind X-User-Id (read-only). Users are seeded,\
+        \ not managed through the API."
+      operationId: me
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+          description: The caller's identity
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      security:
+      - userId: []
+      summary: Who am I
+      tags:
+      - Users
 components:
   responses:
     BadRequest:
@@ -386,6 +433,7 @@ components:
       properties:
         initialBalance:
           type: number
+          example: 500.0
       required:
       - initialBalance
     ExternalBankResponse:
@@ -522,3 +570,25 @@ components:
       - amount
       - sourceAccountId
       - transferType
+    UserResponse:
+      type: object
+      properties:
+        email:
+          type: string
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+  securitySchemes:
+    userId:
+      description: "Simulated identity: there is no real authentication (ADR-0007).\
+        \ With the docker profile, use the seeded demo user 99999999-9999-9999-9999-999999999999."
+      in: header
+      name: X-User-Id
+      type: apiKey

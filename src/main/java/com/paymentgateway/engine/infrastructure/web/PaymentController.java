@@ -6,8 +6,10 @@ import com.paymentgateway.engine.application.usecase.TransferOutcome;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -17,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.UUID;
 
+@SecurityRequirement(name = "userId")
 @Tag(name = "Payments")
 @RestController
 @RequestMapping("/api/v1/payments")
@@ -42,10 +45,43 @@ public class PaymentController {
     @ApiResponse(responseCode = "503", ref = "#/components/responses/ServiceUnavailable")
     @PostMapping("/transfer")
     public ResponseEntity<?> transfer(
-            @Parameter(description = "Requesting user; must own the source account")
-            @RequestHeader("X-User-Id") UUID userId,
-            @Parameter(description = "Unique key per logical transfer; reuse it to retry safely")
+            @Parameter(hidden = true) @RequestHeader("X-User-Id") UUID userId,
+            @Parameter(description = "Any unique text per transfer (tour-001, tour-002...). "
+                    + "Send the same key again to see the idempotent replay: same response, no second debit.")
             @RequestHeader("X-Idempotency-Key") String idempotencyKey,
+            @io.swagger.v3.oas.annotations.parameters.RequestBody(content = @Content(examples = {
+                    @ExampleObject(name = "1. INTERNAL: Alice checking -> savings", value = """
+                            {"sourceAccountId": "30000000-0000-0000-0000-000000000001",
+                             "transferType": "INTERNAL",
+                             "targetAccountId": "30000000-0000-0000-0000-000000000002",
+                             "amount": 100.00}"""),
+                    @ExampleObject(name = "2. EXTERNAL: reliable provider (SWIFT-demo)", value = """
+                            {"sourceAccountId": "30000000-0000-0000-0000-000000000001",
+                             "transferType": "EXTERNAL",
+                             "targetProviderId": "10000000-0000-0000-0000-000000000001",
+                             "targetBankId": "20000000-0000-0000-0000-000000000001",
+                             "targetExternalReference": "ES9121000418450200051332",
+                             "amount": 50.00}"""),
+                    @ExampleObject(name = "3. EXTERNAL: flaky provider, recovered by retries (~3 s)", value = """
+                            {"sourceAccountId": "30000000-0000-0000-0000-000000000001",
+                             "transferType": "EXTERNAL",
+                             "targetProviderId": "10000000-0000-0000-0000-000000000002",
+                             "targetBankId": "20000000-0000-0000-0000-000000000002",
+                             "targetExternalReference": "REF-FLAKY",
+                             "amount": 30.00}"""),
+                    @ExampleObject(name = "4. Error 422: insufficient balance", value = """
+                            {"sourceAccountId": "30000000-0000-0000-0000-000000000001",
+                             "transferType": "INTERNAL",
+                             "targetAccountId": "30000000-0000-0000-0000-000000000002",
+                             "amount": 999999.00}"""),
+                    @ExampleObject(name = "5. Error 503: provider down (retries exhausted)", value = """
+                            {"sourceAccountId": "30000000-0000-0000-0000-000000000001",
+                             "transferType": "EXTERNAL",
+                             "targetProviderId": "10000000-0000-0000-0000-000000000002",
+                             "targetBankId": "20000000-0000-0000-0000-000000000002",
+                             "targetExternalReference": "REF-CB-ALWAYS-FAIL",
+                             "amount": 10.00}""")
+            }))
             @Valid @RequestBody TransferRequest request) {
 
         if (idempotencyKey == null || idempotencyKey.isBlank()) {
