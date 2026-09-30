@@ -1,64 +1,29 @@
-# ADR-0005: traceId con Servlet Filter + MDC y logging JSON, sin tracing distribuido
+# ADR-0005: traceId with Servlet Filter + MDC and JSON Logging, without Distributed Tracing
 
 ## Status
 Accepted
 
 ## Context
-BR-011 exige que cada error RFC 7807 incluya un traceId que coincida
-exactamente con los logs de esa request, y el proveedor de autorización
-(Sección 7.1) recibe X-Trace-Id para correlacionar sus logs con los
-nuestros. El sistema es un monolito de un solo nodo, sin grafo de
-servicios que justifique tracing distribuido (Micrometer Tracing, OTel).
+BR-011 requires that every RFC 7807 error includes a traceId exactly matching the logs of that request, and the authorization provider (Section 7.1) receives `X-Trace-Id` to correlate its logs with ours. The system is a single-node monolith, lacking a service graph to justify distributed tracing (Micrometer Tracing, OTel).
 
 ## Decision
-- `TraceIdFilter` (máxima precedencia) genera o respeta el `X-Trace-Id`
-  entrante, lo pone en el MDC durante toda la request, lo devuelve en el
-  header de TODAS las respuestas y lo limpia en `finally` (los hilos de
-  Tomcat se reutilizan).
-- Un valor entrante solo se respeta si cumple `^[A-Za-z0-9-]{1,64}$`: es
-  input no confiable que termina en los logs (prevención de log injection).
-- `TraceContext` es el punto único de acceso: `GlobalExceptionHandler` lo
-  añade a cada ProblemDetail y `AuthorizationHttpAdapter` lo propaga al
-  proveedor. Funciona porque todo el procesamiento es síncrono en el mismo
-  hilo; código asíncrono futuro necesitaría propagar el MDC explícitamente.
-- Logs: texto legible con `[traceId=...]` fuera del perfil docker; JSON
-  (logstash-logback-encoder 7.4) en el perfil docker, exponiendo solo la
-  clave `traceId` del MDC.
-- Errores conocidos se registran en WARN sin stack trace; errores
-  desconocidos (catch-all → 500) en ERROR con stack trace. Al cliente solo
-  llega un `detail` seguro; los mensajes internos van al log, saneados.
-- Conflicto BR-002 vs BR-011: una respuesta replicada por idempotencia
-  devuelve el body cacheado EXACTO (BR-002 prevalece). Ese body no lleva
-  el traceId de la request actual; la correlación se mantiene por el
-  header `X-Trace-Id` y los logs.
+- `TraceIdFilter` (highest precedence) generates or respects the incoming `X-Trace-Id`, places it in the MDC for the entire request duration, returns it in the header of ALL responses, and clears it in a `finally` block (Tomcat threads are reused).
+- An incoming value is only respected if it matches `^[A-Za-z0-9-]{1,64}$`: it is untrusted input that ends up in logs (log injection prevention).
+- `TraceContext` is the single access point: `GlobalExceptionHandler` adds it to every ProblemDetail and `AuthorizationHttpAdapter` propagates it to the provider. This works because all processing is synchronous on the same thread; future async code would need to propagate MDC explicitly.
+- Logs: readable text with `[traceId=...]` outside the docker profile; JSON (logstash-logback-encoder 7.4) in the docker profile, exposing only the `traceId` key from MDC.
+- Known errors are logged as WARN without stack traces; unknown errors (catch-all → 500) as ERROR with stack traces. The client only receives a safe `detail`; internal messages go to the log, sanitized.
+- BR-002 vs BR-011 conflict: a response replayed by idempotency returns the EXACT cached body (BR-002 prevails). That body does not contain the current request's traceId; correlation is maintained via the `X-Trace-Id` header and logs.
 
 ## Consequences
-- Correlación verificada automáticamente: `TraceIdLogCorrelationTest`
-  compara el traceId generado de la respuesta con el MDC del evento de log.
-- Contrato por código verificado en `ErrorContractTest`; ejemplos reales
-  en `docs/api/error-examples.md`, regenerables con un script.
-- Sin trazas entre procesos: si el sistema se dividiera en servicios,
-  habría que revisar esta decisión.
+- Correlation verified automatically: `TraceIdLogCorrelationTest` compares the generated traceId in the response with the MDC in the log event.
+- Code contract verified in `ErrorContractTest`; real examples in `docs/api/error-examples.md`, regenerable via script.
+- No cross-process traces: if the system were split into microservices, this decision would need revision.
 
-  ## Update (Fase 11): health y métricas
-- Actuator expone únicamente `health` y `prometheus` (endpoints públicos,
-  sin autenticación, Sección 6 del contexto). `env`, `beans`, etc. no se
-  exponen porque pueden filtrar configuración.
-- `/actuator/health` muestra el estado de cada componente (`db`, `redis`,
-  `circuitBreakers`) pero no sus detalles (`show-details: never`): sin
-  versiones ni estado interno del circuito.
-- Circuito OPEN -> componente `circuitBreakers` DOWN
-  (`allowHealthIndicatorToFail: true`, explícito). HALF_OPEN -> UNKNOWN,
-  que no degrada el estado agregado.
-- Semántica del agregado: cualquier dependencia caída -> DOWN (HTTP 503),
-  según el contexto. El health responde "¿están sanas mis dependencias?",
-  NO "¿puedo atender tráfico?": sin Redis el sistema sigue siendo correcto
-  (ADR-0003) y con el circuito abierto las transferencias INTERNAL siguen
-  funcionando. Separar liveness/readiness solo tendría sentido con un
-  orquestador (fuera de alcance: Docker Compose, ADR-0006).
-- Métricas vía Micrometer + Prometheus, con el tag común
-  `application=payment-gateway-engine`. Las métricas de Resilience4j llegan
-  por `resilience4j-micrometer`. No se añaden métricas de negocio propias.
-- Reconfirmado: sin tracing distribuido (RISK-011).
-- En tests, Spring Boot desactiva la exportación de métricas por defecto;
-  `HealthEndpointOutageIT` la reactiva con `@AutoConfigureObservability`.
+## Update (Phase 11): Health and Metrics
+- Actuator exclusively exposes `health` and `prometheus` (public endpoints, no authentication, Context Section 6). `env`, `beans`, etc., are not exposed as they may leak configuration.
+- `/actuator/health` shows component status (`db`, `redis`, `circuitBreakers`) but not details (`show-details: never`): no versions or internal circuit states.
+- Circuit OPEN -> `circuitBreakers` component DOWN (`allowHealthIndicatorToFail: true`, explicit). HALF_OPEN -> UNKNOWN, which does not degrade the aggregated status.
+- Aggregation semantics: any downed dependency -> DOWN (HTTP 503), per context. The health endpoint answers "are my dependencies healthy?", NOT "can I serve traffic?": without Redis, the system remains correct (ADR-0003), and with an open circuit, INTERNAL transfers still work. Separating liveness/readiness would only make sense with an orchestrator (out of scope: Docker Compose, ADR-0006).
+- Metrics via Micrometer + Prometheus, with the common tag `application=payment-gateway-engine`. Resilience4j metrics arrive via `resilience4j-micrometer`. No custom business metrics are added.
+- Reconfirmed: no distributed tracing (RISK-011).
+- In tests, Spring Boot disables metric export by default; `HealthEndpointOutageIT` reactivates it using `@AutoConfigureObservability`.

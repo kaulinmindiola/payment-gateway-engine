@@ -36,4 +36,22 @@ class JpaUserRepositoryAdapterIT extends AbstractPersistenceIntegrationTest {
     void existsById_forUnknownId_returnsFalse() {
         assertThat(adapter.existsById(UUID.randomUUID())).isFalse();
     }
+
+     @Test
+    void findById_forSeededUser_mapsAllAttributes() {
+        UUID id = UUID.randomUUID();
+        userJpaRepository.save(new UserEntity(id, "bob@example.com", "Bob", UserStatus.ACTIVE));
+
+        assertThat(adapter.findById(id)).get()
+                .satisfies(user -> {
+                    assertThat(user.getEmail()).isEqualTo("bob@example.com");
+                    assertThat(user.getName()).isEqualTo("Bob");
+                    assertThat(user.getStatus()).isEqualTo(UserStatus.ACTIVE);
+                });
+    }
+
+    @Test
+    void findById_forUnknownId_returnsEmpty() {
+        assertThat(adapter.findById(UUID.randomUUID())).isEmpty();
+    }
 }

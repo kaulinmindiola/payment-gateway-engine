@@ -1,4 +1,4 @@
-# ADR-0002: Resilience4j via annotations on AuthorizationHttpAdapter
+# ADR-0002: Resilience4j via Annotations on AuthorizationHttpAdapter
 
 ## Status
 Accepted
@@ -21,12 +21,5 @@ EXTERNAL transfers depend on a remote authorization provider that can experience
 - Annotations require active AOP (`spring-boot-starter-aop`). Without it, the code compiles but ignores the resilience rules. For this reason, tests assert the actual number of requests received by WireMock, not just the final return value.
 - Trade-off: Resilience tests wait for real timeouts (~2s per attempt), which increases the overall execution time of the integration test suite.
 
-## Update (Phase 15): responses that violate the provider contract
-A 200 response that breaks the ADR-0011 contract (empty body, unknown
-`status`, APPROVED without `providerReference`, DECLINED without `reason`,
-unreadable JSON) is a technical failure of the channel, not a business
-result. It raises `AuthorizationProtocolException`, a subtype of
-`AuthorizationTechnicalException`, and therefore inherits retries, key
-release and the 503 mapping. JSON parsing errors are classified before
-generic I/O errors because `JsonProcessingException` is an `IOException`.
-Unexpected 4xx responses remain out of scope.
+## Update (Phase 15): Responses that Violate the Provider Contract
+A 200 response that breaks the ADR-0011 contract (empty body, unknown `status`, APPROVED without `providerReference`, DECLINED without `reason`, unreadable JSON) is a technical failure of the channel, not a business result. It raises `AuthorizationProtocolException`, a subtype of `AuthorizationTechnicalException`, and therefore inherits retries, key release and the 503 mapping. JSON parsing errors are classified before generic I/O errors because `JsonProcessingException` is an `IOException`. Unexpected 4xx responses remain out of scope.
