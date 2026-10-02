@@ -237,7 +237,7 @@ Real captured examples: [`docs/api/error-examples.md`](docs/api/error-examples.m
 
 **Coverage gate**: at least 80% line coverage on `domain` + `application`, measured **only with
 unit tests** (so passing it proves the business logic is testable without infrastructure).
-Current value: about 96%. Every uncovered line was reviewed:
+Current value: about 97%. Every uncovered line was reviewed:
 [coverage analysis](docs/testing/coverage-analysis.md).
 
 ```bash
