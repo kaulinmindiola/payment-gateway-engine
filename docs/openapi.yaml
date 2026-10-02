@@ -1,0 +1,594 @@
+openapi: 3.0.1
+info:
+  description: |
+    Internal and external transfers with pessimistic locking, dual idempotency and a resilient provider integration. Every error follows RFC 7807 (application/problem+json) and includes a traceId that matches the X-Trace-Id response header and the server logs.
+
+    **Interactive Tour (docker profile)**
+    1. Click **Authorize** and enter Alice's seeded demo user: `99999999-9999-9999-9999-999999999999`
+    2. Open `POST /api/v1/payments/transfer`, click **Try it out**, and select any of the 5 ready-to-use examples from the dropdown. Click **Execute**!
+    3. Open `GET /api/v1/accounts/{id}/transactions` and click **Execute** (the account id is already pre-filled) to see Alice's history.
+  title: Payment Gateway Engine API
+  version: v1
+servers:
+- description: Local Docker Compose
+  url: http://localhost:8080
+paths:
+  /api/v1/accounts:
+    post:
+      operationId: create
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateAccountRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+          description: Account created
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      security:
+      - userId: []
+      summary: Create a new account
+      tags:
+      - Accounts
+  /api/v1/accounts/{id}:
+    get:
+      operationId: get_1
+      parameters:
+      - description: Account id
+        example: 30000000-0000-0000-0000-000000000001
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/AccountResponse"
+          description: Account details
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      security:
+      - userId: []
+      summary: Get account details
+      tags:
+      - Accounts
+  /api/v1/accounts/{id}/transactions:
+    get:
+      description: "Transactions where the account is the source OR the target, ordered\
+        \ by createdAt DESC (ties broken by id). Only the account owner can query\
+        \ it. There is no global transaction listing by design."
+      operationId: history
+      parameters:
+      - description: Account id
+        example: 30000000-0000-0000-0000-000000000001
+        in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      - description: Zero-based page index
+        in: query
+        name: page
+        required: false
+        schema:
+          type: string
+          default: "0"
+          minimum: 0
+      - description: Page size
+        in: query
+        name: size
+        required: false
+        schema:
+          type: string
+          default: "20"
+          maximum: 100
+          minimum: 1
+      - in: query
+        name: status
+        required: false
+        schema:
+          type: string
+          enum:
+          - PENDING
+          - COMPLETED
+          - FAILED
+      - in: query
+        name: transferType
+        required: false
+        schema:
+          type: string
+          enum:
+          - INTERNAL
+          - EXTERNAL
+      - description: "Inclusive lower bound, ISO-8601 UTC (e.g. 2026-01-01T00:00:00Z)"
+        in: query
+        name: dateFrom
+        required: false
+        schema:
+          type: string
+          format: date-time
+      - description: "Exclusive upper bound, ISO-8601 UTC"
+        in: query
+        name: dateTo
+        required: false
+        schema:
+          type: string
+          format: date-time
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/PageResponseTransactionResponse"
+          description: "Paginated history (same Transaction representation as GET\
+            \ /transactions/{id})"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      security:
+      - userId: []
+      summary: Transaction history of an account
+      tags:
+      - Accounts
+  /api/v1/external-banks:
+    get:
+      description: "Public reference catalog, no authentication required"
+      operationId: getAll
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ExternalBankResponse"
+          description: List of external banks
+      summary: List all external banks
+      tags:
+      - External banks
+  /api/v1/external-banks/{id}:
+    get:
+      description: "Public reference catalog, no authentication required"
+      operationId: getById
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/ExternalBankResponse"
+          description: External bank details
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      summary: Get external bank details
+      tags:
+      - External banks
+  /api/v1/payments/transfer:
+    post:
+      description: "Idempotent via X-Idempotency-Key: repeating a completed request\
+        \ returns the original response without executing it again; a request still\
+        \ in progress returns 409. A provider DECLINED is a business result: 201 with\
+        \ status FAILED and failureReason DECLINED."
+      operationId: transfer
+      parameters:
+      - description: "Any unique text per transfer (tour-001, tour-002...). Send the\
+          \ same key again to see the idempotent replay: same response, no second\
+          \ debit."
+        in: header
+        name: X-Idempotency-Key
+        required: true
+        schema:
+          type: string
+      requestBody:
+        content:
+          application/json:
+            examples:
+              "1. INTERNAL: Alice checking -> savings":
+                description: "1. INTERNAL: Alice checking -> savings"
+                value:
+                  sourceAccountId: 30000000-0000-0000-0000-000000000001
+                  transferType: INTERNAL
+                  targetAccountId: 30000000-0000-0000-0000-000000000002
+                  amount: 100.0
+              "2. EXTERNAL: reliable provider (SWIFT-demo)":
+                description: "2. EXTERNAL: reliable provider (SWIFT-demo)"
+                value:
+                  sourceAccountId: 30000000-0000-0000-0000-000000000001
+                  transferType: EXTERNAL
+                  targetProviderId: 10000000-0000-0000-0000-000000000001
+                  targetBankId: 20000000-0000-0000-0000-000000000001
+                  targetExternalReference: ES9121000418450200051332
+                  amount: 50.0
+              "3. EXTERNAL: flaky provider, recovered by retries (~3 s)":
+                description: "3. EXTERNAL: flaky provider, recovered by retries (~3\
+                  \ s)"
+                value:
+                  sourceAccountId: 30000000-0000-0000-0000-000000000001
+                  transferType: EXTERNAL
+                  targetProviderId: 10000000-0000-0000-0000-000000000002
+                  targetBankId: 20000000-0000-0000-0000-000000000002
+                  targetExternalReference: REF-FLAKY
+                  amount: 30.0
+              "4. Error 422: insufficient balance":
+                description: "4. Error 422: insufficient balance"
+                value:
+                  sourceAccountId: 30000000-0000-0000-0000-000000000001
+                  transferType: INTERNAL
+                  targetAccountId: 30000000-0000-0000-0000-000000000002
+                  amount: 999999.0
+              "5. Error 503: provider down (retries exhausted)":
+                description: "5. Error 503: provider down (retries exhausted)"
+                value:
+                  sourceAccountId: 30000000-0000-0000-0000-000000000001
+                  transferType: EXTERNAL
+                  targetProviderId: 10000000-0000-0000-0000-000000000002
+                  targetBankId: 20000000-0000-0000-0000-000000000002
+                  targetExternalReference: REF-CB-ALWAYS-FAIL
+                  amount: 10.0
+            schema:
+              $ref: "#/components/schemas/TransferRequest"
+        required: true
+      responses:
+        "201":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TransactionResponse"
+          description: "Transfer executed, or declined by the provider"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+        "409":
+          $ref: "#/components/responses/Conflict"
+        "422":
+          $ref: "#/components/responses/UnprocessableEntity"
+        "503":
+          $ref: "#/components/responses/ServiceUnavailable"
+      security:
+      - userId: []
+      summary: Transfer money (INTERNAL or EXTERNAL)
+      tags:
+      - Payments
+  /api/v1/transactions/{id}:
+    get:
+      operationId: get
+      parameters:
+      - in: path
+        name: id
+        required: true
+        schema:
+          type: string
+          format: uuid
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/TransactionResponse"
+          description: Transaction details
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      security:
+      - userId: []
+      summary: Get transaction details
+      tags:
+      - Transactions
+  /api/v1/users/me:
+    get:
+      description: "Returns the identity behind X-User-Id (read-only). Users are seeded,\
+        \ not managed through the API."
+      operationId: me
+      responses:
+        "200":
+          content:
+            '*/*':
+              schema:
+                $ref: "#/components/schemas/UserResponse"
+          description: The caller's identity
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "404":
+          $ref: "#/components/responses/NotFound"
+      security:
+      - userId: []
+      summary: Who am I
+      tags:
+      - Users
+components:
+  responses:
+    BadRequest:
+      content:
+        application/problem+json:
+          example:
+            detail: Required header 'X-User-Id' is missing.
+            instance: /api/v1/accounts/21cd6102-7cfe-4c51-8a21-92ecf9e1b6af
+            status: 400
+            title: Bad Request
+            traceId: example-400
+            type: https://payment-gateway-engine/errors/missing-required-header
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+      description: "Invalid request (format, missing header, validation)"
+    Conflict:
+      content:
+        application/problem+json:
+          example:
+            detail: A transfer with idempotency key 'example-409' is already in progress
+            instance: /api/v1/payments/transfer
+            status: 409
+            title: Conflict
+            traceId: example-409
+            type: https://payment-gateway-engine/errors/idempotency-conflict
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+      description: A request with the same X-Idempotency-Key is in progress
+    Forbidden:
+      content:
+        application/problem+json:
+          example:
+            detail: "Requester does not own resource: 21cd6102-7cfe-4c51-8a21-92ecf9e1b6af"
+            instance: /api/v1/accounts/21cd6102-7cfe-4c51-8a21-92ecf9e1b6af
+            status: 403
+            title: Forbidden
+            traceId: example-403
+            type: https://payment-gateway-engine/errors/ownership-violation
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+      description: The requester does not own the resource
+    NotFound:
+      content:
+        application/problem+json:
+          example:
+            detail: "Account not found: 00000000-0000-0000-0000-000000000000"
+            instance: /api/v1/accounts/00000000-0000-0000-0000-000000000000
+            status: 404
+            title: Not Found
+            traceId: example-404
+            type: https://payment-gateway-engine/errors/account-not-found
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+      description: Resource not found
+    ServiceUnavailable:
+      content:
+        application/problem+json:
+          example:
+            detail: External authorization provider is temporarily unavailable. The
+              transfer was not executed and can be safely retried with the same X-Idempotency-Key.
+            instance: /api/v1/payments/transfer
+            status: 503
+            title: Service Unavailable
+            traceId: example-503
+            type: https://payment-gateway-engine/errors/authorization-provider-unavailable
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+      description: External authorization provider unavailable after retries
+    UnprocessableEntity:
+      content:
+        application/problem+json:
+          example:
+            detail: "Source and target account must not be the same: 21cd6102-7cfe-4c51-8a21-92ecf9e1b6af"
+            instance: /api/v1/payments/transfer
+            status: 422
+            title: Unprocessable Entity
+            traceId: example-422
+            type: https://payment-gateway-engine/errors/business-rule-violation
+          schema:
+            $ref: "#/components/schemas/ProblemDetail"
+      description: Business rule violated
+  schemas:
+    AccountResponse:
+      type: object
+      properties:
+        balance:
+          type: number
+        id:
+          type: string
+          format: uuid
+        ownerId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - BLOCKED
+          - CLOSED
+    CreateAccountRequest:
+      type: object
+      properties:
+        initialBalance:
+          type: number
+          example: 500.0
+      required:
+      - initialBalance
+    ExternalBankResponse:
+      type: object
+      properties:
+        code:
+          type: string
+        country:
+          type: string
+        currency:
+          type: string
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        providerCode:
+          type: string
+        providerId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+    PageResponseTransactionResponse:
+      type: object
+      properties:
+        content:
+          type: array
+          items:
+            $ref: "#/components/schemas/TransactionResponse"
+        page:
+          type: integer
+          format: int32
+        size:
+          type: integer
+          format: int32
+        totalElements:
+          type: integer
+          format: int64
+        totalPages:
+          type: integer
+          format: int32
+    ProblemDetail:
+      type: object
+      description: RFC 7807 problem detail
+      properties:
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri
+        status:
+          type: integer
+          format: int32
+        title:
+          type: string
+        traceId:
+          type: string
+          description: Same value as the X-Trace-Id response header and the request
+            logs
+        type:
+          type: string
+          format: uri
+    TransactionResponse:
+      type: object
+      properties:
+        amount:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        failureReason:
+          type: string
+        id:
+          type: string
+          format: uuid
+        sourceAccountId:
+          type: string
+          format: uuid
+        status:
+          type: string
+          enum:
+          - PENDING
+          - COMPLETED
+          - FAILED
+        targetAccountId:
+          type: string
+          format: uuid
+        targetBankId:
+          type: string
+          format: uuid
+        targetExternalReference:
+          type: string
+        targetProviderId:
+          type: string
+          format: uuid
+        transferType:
+          type: string
+          enum:
+          - INTERNAL
+          - EXTERNAL
+    TransferRequest:
+      type: object
+      properties:
+        amount:
+          type: number
+        externalFieldsValid:
+          type: boolean
+        sourceAccountId:
+          type: string
+          format: uuid
+        targetAccountId:
+          type: string
+          format: uuid
+        targetAccountIdValid:
+          type: boolean
+        targetBankId:
+          type: string
+          format: uuid
+        targetExternalReference:
+          type: string
+        targetProviderId:
+          type: string
+          format: uuid
+        transferType:
+          type: string
+          enum:
+          - INTERNAL
+          - EXTERNAL
+      required:
+      - amount
+      - sourceAccountId
+      - transferType
+    UserResponse:
+      type: object
+      properties:
+        email:
+          type: string
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        status:
+          type: string
+          enum:
+          - ACTIVE
+          - INACTIVE
+  securitySchemes:
+    userId:
+      description: "Simulated identity: there is no real authentication (ADR-0007).\
+        \ With the docker profile, use the seeded demo user 99999999-9999-9999-9999-999999999999."
+      in: header
+      name: X-User-Id
+      type: apiKey

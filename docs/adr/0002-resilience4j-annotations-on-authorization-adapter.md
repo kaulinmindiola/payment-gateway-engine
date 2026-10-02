@@ -1,4 +1,4 @@
-# ADR-0002: Resilience4j via annotations on AuthorizationHttpAdapter
+# ADR-0002: Resilience4j via Annotations on AuthorizationHttpAdapter
 
 ## Status
 Accepted
@@ -30,3 +30,5 @@ result. It raises `AuthorizationProtocolException`, a subtype of
 release and the 503 mapping. JSON parsing errors are classified before
 generic I/O errors because `JsonProcessingException` is an `IOException`.
 Unexpected 4xx responses remain out of scope.
+## Update (Phase 15): Responses that Violate the Provider Contract
+A 200 response that breaks the ADR-0011 contract (empty body, unknown `status`, APPROVED without `providerReference`, DECLINED without `reason`, unreadable JSON) is a technical failure of the channel, not a business result. It raises `AuthorizationProtocolException`, a subtype of `AuthorizationTechnicalException`, and therefore inherits retries, key release and the 503 mapping. JSON parsing errors are classified before generic I/O errors because `JsonProcessingException` is an `IOException`. Unexpected 4xx responses remain out of scope.

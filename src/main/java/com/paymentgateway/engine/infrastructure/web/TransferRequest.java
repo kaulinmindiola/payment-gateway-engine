@@ -16,10 +16,10 @@ public record TransferRequest(
         @NotNull(message = "transferType is required")
         TransferType transferType,
 
-        UUID targetAccountId,          // requerido solo si INTERNAL
-        UUID targetProviderId,         // requerido solo si EXTERNAL
-        UUID targetBankId,             // requerido solo si EXTERNAL
-        String targetExternalReference, // requerido solo si EXTERNAL
+        UUID targetAccountId,          
+        UUID targetProviderId,         
+        UUID targetBankId,             
+        String targetExternalReference, 
 
         @NotNull(message = "amount is required")
         @Positive(message = "amount must be strictly positive")

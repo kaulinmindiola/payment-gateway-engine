@@ -64,3 +64,12 @@ resilience4j:
         exponentialBackoffMultiplier: 2
         retryExceptions:
           - com.paymentgateway.engine.infrastructure.adapter.http.AuthorizationTechnicalException
+
+springdoc:
+  api-docs:
+    enabled: false
+  swagger-ui:
+    enabled: false
+  override-with-generic-response: false
+  writer-with-order-by-keys: true
+  remove-broken-reference-definitions: false

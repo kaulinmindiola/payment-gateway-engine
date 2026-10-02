@@ -1,63 +1,24 @@
-# ADR-0004: Pessimistic locking con LockOrderPolicy aislado
+# ADR-0004: Pessimistic Locking with Isolated LockOrderPolicy
 
 ## Status
 Accepted
 
 ## Context
-Las transferencias INTERNAL (Fase 5) requieren modificar dos cuentas
-(débito + crédito) de forma atómica bajo concurrencia alta (`CS-01`).
-Dos estrategias son posibles: optimistic locking (vía `Account.version`,
-ya reservado en el modelo desde Fase 2) o pessimistic locking (bloqueo
-explícito de fila antes de leer). Con optimistic locking, bajo alta
-contención sobre el mismo par de cuentas, la mayoría de las transacciones
-concurrentes fallarían con `OptimisticLockException` y requerirían
-reintento a nivel de aplicación -- una complejidad adicional no justificada
-para el volumen de contención que el propio `CS-01` exige probar (20/50
-hilos sobre el mismo par).
+INTERNAL transfers (Phase 5) require modifying two accounts (debit + credit) atomically under high concurrency (`CS-01`). Two strategies are possible: optimistic locking (via `Account.version`, already reserved in the model since Phase 2) or pessimistic locking (explicit row lock before reading). With optimistic locking, under high contention on the same pair of accounts, most concurrent transactions would fail with `OptimisticLockException` and require application-level retries -- added complexity not justified for the contention volume that `CS-01` itself demands testing (20/50 threads on the same pair).
 
-Adicionalmente, sin un orden determinista de adquisición de locks, dos
-transferencias en direcciones opuestas sobre el mismo par de cuentas
-(A->B y B->A simultáneas) producirían un deadlock clásico: cada
-transacción bloquea una cuenta y espera indefinidamente la otra
-(`RISK-001`).
+Additionally, without a deterministic lock acquisition order, two concurrent transfers in opposite directions on the same account pair (simultaneous A->B and B->A) would produce a classic deadlock: each transaction locks one account and waits indefinitely for the other (`RISK-001`).
 
 ## Decision
-- Estrategia única: pessimistic locking vía JPA `@Lock(LockModeType.PESSIMISTIC_WRITE)`
-  (`AccountJpaRepository.findByIdForUpdate`, Fase 3), dentro de un único
-  método `@Transactional` (`InternalTransferHandler.handle`, Fase 5).
-- `LockOrderPolicy` (`domain/policy/`) resuelve el orden de adquisición
-  ascendente por `UUID.compareTo()`, invocado UNA vez por transferencia,
-  antes de cualquier `findByIdForUpdate()`. Es una clase de dominio pura,
-  sin anotaciones de framework -- Spring la registra como bean
-  explícitamente vía `infrastructure/config/DomainPolicyConfig`, sin que
-  `domain/` conozca la existencia de Spring.
-- `Account.version` (optimistic locking) permanece reservado, sin uso
-  (Fase 2, Principio 6 del plan) -- no se combina con pessimistic locking
-  en este alcance.
-- No se usa SQL nativo (`nativeQuery`) para el `FOR UPDATE` -- se delega
-  en la anotación `@Lock` de Spring Data JPA, dejando a Hibernate la
-  responsabilidad de traducir correctamente contra el dialecto configurado.
+- Single strategy: pessimistic locking via JPA `@Lock(LockModeType.PESSIMISTIC_WRITE)` (`AccountJpaRepository.findByIdForUpdate`, Phase 3), inside a single `@Transactional` method (`InternalTransferHandler.handle`, Phase 5).
+- `LockOrderPolicy` (`domain/policy/`) resolves the ascending acquisition order by `UUID.compareTo()`, invoked ONCE per transfer, before any `findByIdForUpdate()`. It is a pure domain class, without framework annotations -- Spring registers it as a bean explicitly via `infrastructure/config/DomainPolicyConfig`, without `domain/` knowing about Spring.
+- `Account.version` (optimistic locking) remains reserved, unused (Phase 2, Plan Principle 6) -- not combined with pessimistic locking in this scope.
+- Native SQL (`nativeQuery`) is not used for `FOR UPDATE` -- it delegates to Spring Data JPA's `@Lock` annotation, leaving Hibernate responsible for correctly translating it to the configured dialect.
 
 ## Consequences
-- **Nota de verificación empírica** (Fase 3, Paso 4): sobre PostgreSQL 16
-  con Hibernate 7, `PESSIMISTIC_WRITE` se traduce a `FOR NO KEY UPDATE`,
-  no a `FOR UPDATE` literal -- una optimización nativa de Postgres para
-  reducir contención en cadenas de FK. Se verificó explícitamente
-  (capturando el SQL real emitido, no asumiendo el texto del contexto)
-  que esta variante preserva la exclusión mutua requerida: ninguna otra
-  ruta del sistema solicita `FOR KEY SHARE`/`FOR SHARE` sobre `accounts`,
-  así que dos `FOR NO KEY UPDATE` concurrentes sobre la misma fila siguen
-  bloqueándose mutuamente, igual que `FOR UPDATE` lo haría.
-- `CS-01` verificado con test de concurrencia (20/50 hilos, mismo par de
-  cuentas) reproducible en 10 ejecuciones consecutivas.
-- `RISK-001` verificado con test de concurrencia cruzada (A->B/B->A
-  simultáneas, 40 hilos) -- sin deadlock, balance neto exacto.
-- Costo: cada transferencia INTERNAL retiene un lock de fila durante toda
-  la duración de la transacción -- aceptable para el volumen que el
-  proyecto declara (Sección 1 del contexto: portfolio, sin SLA productivo
-  real, `CON-007`).
+- **Empirical verification note** (Phase 3, Step 4): On PostgreSQL 16 with Hibernate 7, `PESSIMISTIC_WRITE` translates to `FOR NO KEY UPDATE`, not literal `FOR UPDATE` -- a native Postgres optimization to reduce contention on FK chains. It was explicitly verified (capturing the actual emitted SQL, not just assuming text context) that this variant preserves the required mutual exclusion: no other system path requests `FOR KEY SHARE`/`FOR SHARE` on `accounts`, so two concurrent `FOR NO KEY UPDATE` queries on the same row still mutually block each other, just as `FOR UPDATE` would.
+- `CS-01` verified with a concurrency test (20/50 threads, same account pair) reproducible across 10 consecutive runs.
+- `RISK-001` verified with cross-concurrency test (simultaneous A->B/B->A, 40 threads) -- no deadlocks, exact net balance.
+- Cost: each INTERNAL transfer retains a row lock for the entire duration of the transaction -- acceptable for the volume declared by the project (Context Section 1: portfolio, no real production SLA, `CON-007`).
 
-  ## Update (Fase 9)
-Corrección: con el stack real (ADR-0012, Spring Boot 3.3.0) la versión es
-Hibernate 6.x, no 7. El comportamiento verificado no cambia: sobre
-PostgreSQL 16, `PESSIMISTIC_WRITE` se emite como `FOR NO KEY UPDATE`.
+## Update (Phase 9)
+Correction: with the actual stack (ADR-0012, Spring Boot 3.3.0) the version is Hibernate 6.x, not 7. The verified behavior remains unchanged: on PostgreSQL 16, `PESSIMISTIC_WRITE` is emitted as `FOR NO KEY UPDATE`.

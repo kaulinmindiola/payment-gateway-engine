@@ -11,7 +11,11 @@ import org.testcontainers.utility.DockerImageName;
 public abstract class AbstractApplicationIntegrationTest {
 
     @ServiceConnection
-    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16");
+    static final PostgreSQLContainer<?> POSTGRES = new PostgreSQLContainer<>("postgres:16")
+        // Several cached Spring contexts share this singleton container, each with its
+        // own Hikari pool (up to 60 for the concurrency tests). The default of 100
+        // connections is not enough once a third context exists.
+        .withCommand("postgres", "-c", "fsync=off", "-c", "max_connections=300");
 
     static final GenericContainer<?> REDIS = new GenericContainer<>(DockerImageName.parse("redis:7"))
             .withExposedPorts(6379);
@@ -26,7 +30,8 @@ public abstract class AbstractApplicationIntegrationTest {
     @DynamicPropertySource
     static void increaseConnectionPoolForConcurrencyTests(DynamicPropertyRegistry registry) {
         registry.add("spring.datasource.hikari.maximum-pool-size", () -> "60");
-    }
+        registry.add("spring.datasource.hikari.minimum-idle", () -> "2");
+    }   
 
     @DynamicPropertySource
     static void redisProperties(DynamicPropertyRegistry registry) {
